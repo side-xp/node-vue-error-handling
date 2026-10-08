@@ -12,9 +12,6 @@ dist
 dist-ssr
 coverage
 .vitest
-docs/api
-docs/.vitepress/cache
-docs/.vitepress/dist
 *.local
 
 # Editor directories and files

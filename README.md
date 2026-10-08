@@ -1,17 +1,17 @@
-# @todo
+# Vue Error Handling
 
-> Replace this description with a short summary of what this package does.
+A utility for handling routing & component errors in Vue apps.
 
 ## Install
 
 ```bash
-npm install @todo/my-package
+npm install @side-xp/vue-error-handling
 ```
 
 ## Usage
 
 ```ts
-import { hello } from '@todo/my-package'
+import { hello } from '@side-xp/vue-error-handling'
 
 hello('world') // => 'Hello, world!'
 ```

@@ -43,7 +43,7 @@ jobs:
   # `npm publish` runs the `prepack` (build) and `prepublishOnly` (check:package)
   # scripts, so a broken package can never be published.
   # Auth uses npm Trusted Publishing (OIDC), not NPM_TOKEN. Requires a trusted publisher configured on npmjs.com (see
-  # docs/protocols.md).
+  # CONTRIBUTING.md).
   release:
     name: Release
     needs: check
@@ -78,48 +78,3 @@ jobs:
       - run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Builds the VitePress documentation and deploys it to GitHub Pages.
-  # Runs after `release` so the deployed docs (which embed the generated API reference) never get ahead of a failed
-  # publish. semantic-release exits cleanly  when there is nothing to release, so docs-only pushes still deploy.
-  # Requires Pages to be enabled: repo Settings > Pages > Source = GitHub Actions.
-  deploy-docs:
-    name: Deploy docs
-    needs: release
-    if: >
-      github.event_name == 'push'
-      && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-      && !github.event.repository.is_template
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - run: npm ci
-
-      - uses: actions/configure-pages@v6
-
-      # VitePress reads BASE_PATH so assets resolve under https://<user>.github.io/<repo>/
-      - run: npm run docs:build
-        env:
-          BASE_PATH: /${{ github.event.repository.name }}/
-
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: docs/.vitepress/dist
-
-      - id: deployment
-        uses: actions/deploy-pages@v5
-
-      # Surface the live URL at the top of the workflow run summary.
-      - run: echo "Docs deployed to ${{ steps.deployment.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"

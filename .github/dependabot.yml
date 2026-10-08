@@ -1,0 +1,41 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Wait before proposing a new release, so compromised or broken versions have time to be caught and pulled
+    cooldown:
+      default-days: 7
+    # Conventional Commits, so semantic-release handles these PRs correctly:
+    # runtime dependencies trigger a patch release (`fix(deps)`), dev dependencies don't (`chore(deps)`)
+    commit-message:
+      prefix: fix
+      prefix-development: chore
+      include: scope
+    # Minor and patch updates are grouped into one PR per dependency type, major updates get their own PR
+    groups:
+      dependencies:
+        dependency-type: production
+        update-types: [minor, patch]
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # `@types/node` major version must match the Node version in `.nvmrc`, so it's updated manually
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      github-actions:
+        patterns: ["*"]

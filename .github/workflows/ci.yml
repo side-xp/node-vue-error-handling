@@ -1,0 +1,125 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - dev
+      - develop
+      - main
+      - master
+  # Run checks on every pull request, whatever branch it targets.
+  pull_request:
+
+jobs:
+  check:
+    name: Lint, types, tests, build & package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lets the coverage step post/update its comment on pull requests.
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm run coverage
+
+      # Posts a coverage summary table as a sticky comment on pull requests.
+      - name: Report coverage
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: davelosert/vitest-coverage-report-action@v2
+
+      - run: npm run build
+      # publint + attw: validates the published package shape (exports, types resolution).
+      - run: npm run check:package
+
+  # Publishes the package to npm and creates a GitHub release via semantic-release.
+  # `npm publish` runs the `prepack` (build) and `prepublishOnly` (check:package)
+  # scripts, so a broken package can never be published.
+  # Auth uses npm Trusted Publishing (OIDC), not NPM_TOKEN. Requires a trusted publisher configured on npmjs.com (see
+  # docs/protocols.md).
+  release:
+    name: Release
+    needs: check
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    if: >
+      github.event_name == 'push'
+      && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      && !github.event.repository.is_template
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      # Required for npm Trusted Publishing (OIDC) and provenance.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Do NOT set registry-url here: it writes an .npmrc that conflicts with semantic-release's OIDC auth
+      # (EINVALIDNPMTOKEN).
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Builds the VitePress documentation and deploys it to GitHub Pages.
+  # Runs after `release` so the deployed docs (which embed the generated API reference) never get ahead of a failed
+  # publish. semantic-release exits cleanly  when there is nothing to release, so docs-only pushes still deploy.
+  # Requires Pages to be enabled: repo Settings > Pages > Source = GitHub Actions.
+  deploy-docs:
+    name: Deploy docs
+    needs: release
+    if: >
+      github.event_name == 'push'
+      && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      && !github.event.repository.is_template
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/configure-pages@v6
+
+      # VitePress reads BASE_PATH so assets resolve under https://<user>.github.io/<repo>/
+      - run: npm run docs:build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/.vitepress/dist
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
+
+      # Surface the live URL at the top of the workflow run summary.
+      - run: echo "Docs deployed to ${{ steps.deployment.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"

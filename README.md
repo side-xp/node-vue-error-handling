@@ -361,7 +361,9 @@ The errors thrown by the components, caught by Vue: setup, render, lifecycle hoo
 ## Known issues
 
 - **Boundary inside a `<Suspense>` that is still loading**: it can't replace an async setup that fails with its fallback. Vue renders the failed component after its error, while the boundary already replaced it, and crashes (`Cannot read properties of null (reading 'insertBefore')`). It happens with any `onErrorCaptured()` hook, even without this package. Place the boundary around the `<Suspense>` instead. Once the `<Suspense>` is resolved, the boundaries inside it work as usual.
-- **Boundary rendered on a server**: it handles the errors of its content (they're given to `onError()` as handled by the boundary), but the server renders the failed content (empty) instead of the fallback. The server renders the app in a single pass: the boundary is already rendered when its content fails. Vue's `onErrorCaptured()` has the same limitation.
+- **Boundary rendered on a server**: it handles the errors of its content (they're given to `onError()` as handled by the boundary), but the server renders the failed content (empty) instead of the fallback. The server renders the app in a single pass: the boundary is already rendered when its content fails. Vue's `onErrorCaptured()` has the same limitation. In the browser:
+  - If the content fails again while hydrating, the boundary displays its fallback, without hydration mismatch.
+  - If the content only failed on the server (e.g. a request that only failed there), it's displayed in the browser, and Vue reports a hydration mismatch (`Hydration completed but contains mismatches.`) like for any difference between the server and the browser.
 
 ## Contributing
 

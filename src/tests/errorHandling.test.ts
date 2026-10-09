@@ -196,6 +196,25 @@ describe('createErrorHandling()', () => {
       expect(getMessage(404)).toBe('404')
     })
 
+    it('uses the message of the objects that are not errors', () => {
+      expect(getMessage({ message: 'Request failed', code: 500 })).toBe('Request failed')
+      expect(getMessage(Object.assign(Object.create(null), { message: 'No prototype' }))).toBe('No prototype')
+    })
+
+    it('ignores the message of an object when it is not a non-empty string', () => {
+      expect(getMessage({ message: '' })).toBe('[object Object]')
+      expect(getMessage({ message: 42 })).toBe('[object Object]')
+    })
+
+    it('ignores the message of an object when reading it fails', () => {
+      const thrown: object = {
+        get message(): string {
+          throw new Error('Getter failed')
+        },
+      }
+      expect(getMessage(thrown)).toBe('[object Object]')
+    })
+
     it('falls back to a generic message for the values that cannot be converted', () => {
       expect(getMessage(Object.create(null))).toBe('Unknown error')
     })

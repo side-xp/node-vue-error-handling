@@ -244,7 +244,7 @@ The callbacks receive a `CaughtError`, the same normalized object whatever the e
 | Property | Description |
 |---|---|
 | `error` | The thrown value, as is |
-| `message` | A readable message, from any thrown value. Meant for logs and developers: write the texts displayed to the users yourself (e.g. translated, from the error or its context) |
+| `message` | A readable message, from any thrown value (including the objects that are not errors but have a `message`, e.g. `{ message, code }`). Meant for logs and developers: write the texts displayed to the users yourself (e.g. translated, from the error or its context) |
 | `source` | Where the error was caught. Narrows the type of the error to get the properties of its source |
 | `isChunkLoadError` | Whether a lazy loaded chunk failed to load (e.g. a page or an async component, after a new deployment) |
 

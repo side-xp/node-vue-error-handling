@@ -6,10 +6,28 @@ import { getVuePhase } from './vuePhases'
 /** Checks if an error is a failure to load a chunk, with the detection of the error handling. */
 export type ChunkLoadErrorDetector = (error: unknown) => boolean
 
+/** Gets the `message` property of an object that is not an `Error` (e.g. `{ message, code }`), if it's a non-empty string. */
+function getMessageProperty(error: object): string | undefined {
+  try {
+    const { message } = error as { message?: unknown }
+    return typeof message === 'string' && message !== '' ? message : undefined
+  } catch {
+    // The property can be a getter that throws
+    return undefined
+  }
+}
+
 /** Gets a readable message from any thrown value. */
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message || error.name
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    const message: string | undefined = getMessageProperty(error)
+    if (message !== undefined) {
+      return message
+    }
   }
 
   try {

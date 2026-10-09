@@ -11,6 +11,7 @@ import NotificationList from './components/NotificationList.vue'
       <RouterLink to="/">Home</RouterLink>
       <RouterLink to="/component-errors">Component errors</RouterLink>
       <RouterLink to="/unhandled-errors">Unhandled errors</RouterLink>
+      <RouterLink to="/outside-errors">Errors outside of Vue</RouterLink>
     </nav>
   </header>
   <main>

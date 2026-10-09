@@ -4,8 +4,18 @@ import { clearErrorLog, errorLog } from '../errorLog'
 
 /** Describes where an error was caught. */
 function describeContext(caught: CaughtError): string {
-  const componentName: string = caught.instance?.$options.name ?? caught.instance?.$options.__name ?? 'anonymous'
-  return `${caught.phase} of <${componentName}> (Vue info: "${caught.vueInfo}")`
+  switch (caught.source) {
+    case 'component': {
+      const componentName: string = caught.instance?.$options.name ?? caught.instance?.$options.__name ?? 'anonymous'
+      return `${caught.phase} of <${componentName}> (Vue info: "${caught.vueInfo}")`
+    }
+    case 'promise':
+      return 'Promise rejected without being caught'
+    case 'global':
+      return `Thrown outside of Vue, at ${caught.event.filename || 'unknown file'}:${caught.event.lineno}`
+    case 'reported':
+      return 'Reported by the app'
+  }
 }
 </script>
 

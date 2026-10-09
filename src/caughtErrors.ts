@@ -1,6 +1,12 @@
 import type { ComponentPublicInstance } from 'vue'
-import type { RouteLocationNormalized, RouteLocationNormalizedLoaded } from 'vue-router'
-import type { ComponentError, GlobalError, NavigationError, PromiseRejectionError, ReportedError } from './types'
+import type {
+  ComponentError,
+  GlobalError,
+  NavigationError,
+  PromiseRejectionError,
+  ReportedError,
+  RouteLike,
+} from './types'
 import { getVuePhase } from './vuePhases'
 
 /** Checks if an error is a failure to load a chunk, with the detection of the error handling. */
@@ -85,8 +91,8 @@ export function createGlobalError(event: ErrorEvent, isChunkLoadError: ChunkLoad
 /** Creates the normalized error of a navigation that failed. */
 export function createNavigationError(
   error: unknown,
-  to: RouteLocationNormalized,
-  from: RouteLocationNormalizedLoaded,
+  to: RouteLike,
+  from: RouteLike,
   isChunkLoadError: ChunkLoadErrorDetector,
 ): NavigationError {
   return {

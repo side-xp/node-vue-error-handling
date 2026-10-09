@@ -1,4 +1,5 @@
 import { type App, createApp, defineComponent, h, type VNodeChild } from 'vue'
+import type { Router } from 'vue-router'
 import { ErrorBoundary } from '@/errorBoundary'
 import { createErrorHandling } from '@/errorHandling'
 import type { ErrorBoundaryActions, ErrorBoundaryProps, ErrorBoundarySlots, ErrorHandlingOptions } from '@/types'
@@ -27,14 +28,14 @@ export const FailingButton = defineComponent({
   },
 })
 
+/** Options of the error handling, with a router of Vue Router to install it on the app (the error handling only needs a `RouterLike`). */
+export type MountOptions = Omit<ErrorHandlingOptions, 'router'> & { router?: Router }
+
 /**
  * Mounts the given render function in an app with the error handling installed, and the router of the options if any.
  * Returns the app and its container.
  */
-export function mountInApp(
-  render: () => VNodeChild,
-  options: ErrorHandlingOptions = {},
-): { app: App; container: HTMLElement } {
+export function mountInApp(render: () => VNodeChild, options: MountOptions = {}): { app: App; container: HTMLElement } {
   const container: HTMLElement = document.createElement('div')
   const app: App = createApp(defineComponent({ setup: () => render }))
   // Vue warns about the components that can't render after an error

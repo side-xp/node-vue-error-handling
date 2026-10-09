@@ -4,8 +4,8 @@ import { createMemoryHistory, createRouter, type Router, RouterView } from 'vue-
 import { isViteChunkLoadError } from '@/chunkLoadErrors'
 import { createErrorHandling } from '@/errorHandling'
 import { loadPage } from '@/pageLoading'
-import type { ErrorHandling, ErrorHandlingOptions } from '@/types'
-import { mountInApp, renderBoundary, unmountApps } from './helpers'
+import type { ErrorHandling } from '@/types'
+import { type MountOptions, mountInApp, renderBoundary, unmountApps } from './helpers'
 
 // jsdom can't load pages
 vi.mock('@/pageLoading', () => ({ loadPage: vi.fn() }))
@@ -49,9 +49,7 @@ async function createTestRouter(): Promise<Router> {
 }
 
 /** Mounts the router view in a navigation boundary. Returns the router and the container. */
-async function mountRouterView(
-  options: ErrorHandlingOptions = {},
-): Promise<{ router: Router; container: HTMLElement }> {
+async function mountRouterView(options: MountOptions = {}): Promise<{ router: Router; container: HTMLElement }> {
   const router: Router = await createTestRouter()
   const { container } = mountInApp(
     () =>

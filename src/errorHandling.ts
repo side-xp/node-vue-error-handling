@@ -149,7 +149,7 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
 
     const removeErrorHandler: () => void = router.onError((error, to, from) => {
       // A new deployment may have removed the chunks of the running version: loading the page again gets the new ones
-      if (reloadOnChunkLoadError && isChunkLoadError(error) && tryReloadPage(router.resolve(to).href)) {
+      if (reloadOnChunkLoadError && isChunkLoadError(error) && tryReloadPage(router.resolve(to.fullPath).href)) {
         markAsHandled(error)
         return
       }

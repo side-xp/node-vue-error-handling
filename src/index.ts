@@ -16,6 +16,8 @@ export type {
   NavigationError,
   PromiseRejectionError,
   ReportedError,
+  RouteLike,
+  RouterLike,
   UseErrorHandlingReturn,
   VuePhase,
 } from './types'

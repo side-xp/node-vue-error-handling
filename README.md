@@ -278,7 +278,7 @@ The errors thrown by the components, caught by Vue: setup, render, lifecycle hoo
 | `promise` | `event`: the `unhandledrejection` event (e.g. to get the rejected `promise`) |
 | `global` | `event`: the `error` event (e.g. to get the file and line of the error). For a script loaded from another origin without CORS, the browser hides the error: `error` is `null`, and `message` is `'Script error.'` |
 | `reported` | `instance`: the component that reported the error with `useErrorHandling()`, or `null` when reported with the `report()` of `createErrorHandling()` |
-| `navigation` | `to`: the route the navigation was going to. `from`: the route it was coming from |
+| `navigation` | `to`: the route the navigation was going to. `from`: the route it was coming from. Both are `RouteLike`: their common properties (`fullPath`, `path`, `name`, `params`, `query`, `hash`, `meta`), so the package doesn't need the types of Vue Router. For the full route, resolve it with `router.resolve(caught.to.fullPath)` |
 
 ## Contributing
 

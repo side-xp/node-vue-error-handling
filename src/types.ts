@@ -1,5 +1,42 @@
 import type { App, ComponentPublicInstance, VNodeChild } from 'vue'
-import type { RouteLocationNormalized, RouteLocationNormalizedLoaded, Router } from 'vue-router'
+
+/**
+ * A route of the router, with the properties the apps commonly read. Declared here instead of imported from
+ * `vue-router` (an optional peer dependency), so the apps without it don't need its types. The routes of Vue Router
+ * 4 and 5 match it.
+ */
+export interface RouteLike {
+  /** The path of the route, with its query and hash (e.g. `/users/42?tab=posts#bio`). */
+  fullPath: string
+  /** The path of the route, without its query and hash. */
+  path: string
+  /** The name of the route record, if any. */
+  name?: string | symbol | null
+  /** The params of the route. */
+  params: Record<string, string | string[]>
+  /** The query of the route. */
+  query: Record<string, string | null | (string | null)[]>
+  /** The hash of the route, including its `#`, or an empty string. */
+  hash: string
+  /** The meta fields of the route records, merged. */
+  meta: Record<PropertyKey, unknown>
+}
+
+/**
+ * The router of the app, with the methods the error handling uses. Declared here instead of imported from
+ * `vue-router` (an optional peer dependency), so the apps without it don't need its types. The routers of Vue Router
+ * 4 and 5 match it.
+ */
+export interface RouterLike {
+  /** Adds a handler of the navigation errors. Returns a function that removes it. */
+  onError(handler: (error: unknown, to: RouteLike, from: RouteLike) => unknown): () => void
+  /** Adds a hook called after each navigation. Returns a function that removes it. */
+  afterEach(guard: (to: RouteLike, from: RouteLike, failure?: unknown) => unknown): () => void
+  /** Resolves the given path to its URL. */
+  resolve(to: string): { href: string }
+  /** Navigates to the given path. */
+  push(to: string): Promise<unknown>
+}
 
 /** Phase of a component in which Vue caught an error, normalized from the different forms of the `info` given by Vue. */
 export type VuePhase =
@@ -77,9 +114,9 @@ export interface ReportedError extends CaughtErrorBase {
 export interface NavigationError extends CaughtErrorBase {
   source: 'navigation'
   /** The route the navigation was going to. */
-  to: RouteLocationNormalized
+  to: RouteLike
   /** The route the navigation was coming from. */
-  from: RouteLocationNormalizedLoaded
+  from: RouteLike
 }
 
 /** An error caught by the error handling, with the context it was caught in. Narrow it with its `source`. */
@@ -91,7 +128,7 @@ export type ErrorSource = CaughtError['source']
 /** Options of the error handling. */
 export interface ErrorHandlingOptions {
   /** The router of the app, to handle the navigation errors. */
-  router?: Router
+  router?: RouterLike
   /** Receives every caught error that is not ignored (e.g. to plug a monitoring service). Defaults to `console.error()`. */
   onError?: (caught: CaughtError) => void
   /**

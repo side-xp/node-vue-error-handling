@@ -2,9 +2,8 @@ import { afterEach, describe, expect, it, type MockInstance, vi } from 'vitest'
 import { type Component, defineComponent, h, onMounted } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { createErrorHandling } from '@/errorHandling'
-import type { ErrorHandlingOptions } from '@/types'
 import { useErrorHandling } from '@/useErrorHandling'
-import { FailingSetup, mountInApp, unmountApps } from './helpers'
+import { FailingSetup, type MountOptions, mountInApp, unmountApps } from './helpers'
 
 /** Spies on `console.error()`, without logging anything. */
 function spyOnConsoleError(): MockInstance<typeof console.error> {
@@ -12,7 +11,7 @@ function spyOnConsoleError(): MockInstance<typeof console.error> {
 }
 
 /** Mounts the given component in an app with the default `onError()`, which logs the errors. */
-function mountWithDefaultLogging(component: Component, options: ErrorHandlingOptions = {}): void {
+function mountWithDefaultLogging(component: Component, options: MountOptions = {}): void {
   mountInApp(() => h(component), { ...options, onError: undefined })
 }
 

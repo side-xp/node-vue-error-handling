@@ -2,6 +2,8 @@ import { createErrorHandling } from '@side-xp/vue-error-handling'
 import { createApp } from 'vue'
 import App from './App.vue'
 import { router } from './router'
+// Shared with the Vite playground, for a similar aspect
+import '../../playground/src/style.css'
 
 const app = createApp(App)
 app.use(

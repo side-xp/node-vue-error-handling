@@ -20,10 +20,12 @@ function reload(): void {
       <RouterView />
       <template #fallback="{ error, retry }">
         <h2>This page can't be displayed</h2>
-        <p>{{ error.message }}</p>
+        <p class="fallback">{{ error.message }}</p>
         <p>Chunk loading failure: {{ error.isChunkLoadError }}</p>
-        <button type="button" @click="retry">Retry</button>
-        <button v-if="error.isChunkLoadError" type="button" @click="reload">Reload</button>
+        <div class="actions">
+          <button type="button" @click="retry">Retry</button>
+          <button v-if="error.isChunkLoadError" type="button" @click="reload">Reload</button>
+        </div>
       </template>
     </ErrorBoundary>
   </main>

@@ -35,6 +35,13 @@ export default {
     rules: [
       { test: /\.vue$/, loader: 'vue-loader' },
       {
+        // The stylesheet shared with the Vite playground
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader'],
+        // Otherwise dropped: the `package.json` of the library declares no side effects (`"sideEffects": false`)
+        sideEffects: true,
+      },
+      {
         test: /\.ts$/,
         loader: 'ts-loader',
         options: {

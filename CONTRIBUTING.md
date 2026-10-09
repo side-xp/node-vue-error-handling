@@ -9,7 +9,7 @@
 | [Biome](https://biomejs.dev) | Linter & formatter |
 | [Vitest](https://vitest.dev) + [jsdom](https://github.com/jsdom/jsdom) + [Vue Test Utils](https://test-utils.vuejs.org) | Testing & coverage |
 | [Vite](https://vite.dev) | Playground app |
-| [webpack](https://webpack.js.org) + [vue-loader](https://vue-loader.vuejs.org) | Webpack playground app (chunk loading failures with another bundler) |
+| [webpack](https://webpack.js.org) + [vue-loader](https://vue-loader.vuejs.org) | Webpack playground app (chunk loading failures with another bundler), sharing the stylesheet of the Vite playground |
 | [publint](https://publint.dev) + [are-the-types-wrong](https://arethetypeswrong.github.io) | Package shape & types-resolution validation |
 | [Husky](https://typicode.github.io/husky) + [lint-staged](https://github.com/lint-staged/lint-staged) | Git hooks (pre-commit, pre-push) |
 | [commitlint](https://commitlint.js.org) | Commit message linting |

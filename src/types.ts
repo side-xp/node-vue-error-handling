@@ -50,8 +50,20 @@ export type ErrorSource = CaughtError['source']
 
 /** Options of the error handling. */
 export interface ErrorHandlingOptions {
-  /** Receives every caught error (e.g. to plug a monitoring service). Defaults to `console.error()`. */
+  /** Receives every caught error that is not ignored (e.g. to plug a monitoring service). Defaults to `console.error()`. */
   onError?: (caught: CaughtError) => void
+  /**
+   * Receives the caught errors that nothing else handled, after `onError()` (e.g. to display a notification).
+   * An error with the same message is given again only after `throttleMs`.
+   */
+  onUnhandledError?: (caught: CaughtError) => void
+  /** Returns `true` for the errors to ignore: they're given neither to `onError()` nor to `onUnhandledError()`. */
+  ignore?: (caught: CaughtError) => boolean
+  /**
+   * Minimum delay (in milliseconds) before an error with the same message is given to `onUnhandledError()` again, so
+   * a repeated error doesn't flood the screen. `0` disables it. Defaults to 5 seconds.
+   */
+  throttleMs?: number
 }
 
 /** The error handling of an app, to install as a Vue plugin with `app.use()`. */

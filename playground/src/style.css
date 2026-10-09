@@ -10,7 +10,9 @@ body {
   max-width: 960px;
 }
 
-nav {
+nav,
+.actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
 }

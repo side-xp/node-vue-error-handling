@@ -9,5 +9,10 @@ export const router: Router = createRouter({
       name: 'home',
       component: () => import('./pages/HomePage.vue'),
     },
+    {
+      path: '/component-errors',
+      name: 'componentErrors',
+      component: () => import('./pages/ComponentErrorsPage.vue'),
+    },
   ],
 })

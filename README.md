@@ -164,6 +164,21 @@ Both slots receive the `error` (`null` in the `default` slot when there's none),
 </KeepAlive>
 ```
 
+**`<Transition>`**: a boundary around a `<Transition>` (e.g. the page boundary around a router view with transitions) handles the errors of the components it displays, once they enter (with `mode="out-in"`, after the previous one has left). The errors of the JavaScript hooks of the transition (e.g. `@enter`) have the `other` phase: they leave the content, and continue to the app unless a boundary's `filter` accepts them.
+
+```vue
+<ErrorBoundary navigation>
+  <RouterView v-slot="{ Component }">
+    <Transition name="fade" mode="out-in">
+      <component :is="Component" />
+    </Transition>
+  </RouterView>
+  <template #fallback="{ retry }">
+    <button @click="retry">Retry</button>
+  </template>
+</ErrorBoundary>
+```
+
 ### Page boundary and navigation errors
 
 Wrap the router view with a boundary to handle the errors of the pages (e.g. in `App.vue`). With the `navigation` prop, it also displays the navigation errors (a navigation guard that throws, a page that fails to load), which no component threw:
@@ -182,7 +197,7 @@ Wrap the router view with a boundary to handle the errors of the pages (e.g. in 
 ```
 
 - `retry()` navigates to the page again if it failed to load, or displays it again from scratch.
-- The error is cleared after each successful navigation: the user can leave it with any link, or the back button of the browser.
+- The error is cleared after each successful navigation: the user can leave it with any link, or the back button of the browser. Including a link to the current page: after a navigation error, the router stays on the previous page (e.g. a "Home" link, when the navigation from Home failed), and a link to the page that failed displays it again from scratch.
 - Without a navigation boundary (or without its `fallback` slot), the navigation errors go to `onUnhandledError()`.
 
 > Use a single navigation boundary (e.g. around the root router view, not the nested ones): a navigation that fails aborts the whole navigation. With several, the first one mounted displays the errors.

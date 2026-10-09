@@ -1,5 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { type Component, defineComponent, h, KeepAlive, nextTick, onActivated, type Ref, ref, Suspense } from 'vue'
+import {
+  type Component,
+  defineComponent,
+  h,
+  KeepAlive,
+  nextTick,
+  onActivated,
+  type Ref,
+  ref,
+  Suspense,
+  Transition,
+  type VNode,
+  type VNodeChild,
+} from 'vue'
+import { createMemoryHistory, createRouter, type Router, RouterView } from 'vue-router'
 import { ErrorBoundary } from '@/errorBoundary'
 import { createFallback, FailingSetup, mountInApp, renderBoundary, unmountApps } from './helpers'
 
@@ -214,6 +228,135 @@ describe('built-in components', () => {
       expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ message: 'Activation failed', phase: 'hook' }),
       )
+    })
+  })
+
+  describe('Transition', () => {
+    /** A page with a root element, as `<Transition>` needs. */
+    const HomePage = defineComponent({ name: 'HomePage', render: () => h('p', 'Home') })
+
+    it('replaces the transition with the fallback when the entering component fails', async () => {
+      const page: Ref<'home' | 'failing'> = ref('home')
+      const fallback = createFallback()
+      const { container } = mountInApp(() =>
+        renderBoundary(
+          {},
+          {
+            default: () => h(Transition, { mode: 'out-in' }, () => h(page.value === 'home' ? HomePage : FailingSetup)),
+            fallback: fallback.slot,
+          },
+        ),
+      )
+
+      page.value = 'failing'
+      // The failing component is mounted once the previous one has left
+      await vi.waitFor(() => expect(container.textContent).toBe('Fallback: Setup failed'))
+
+      page.value = 'home'
+      fallback.actions.at(-1)?.retry()
+      await vi.waitFor(() => expect(container.textContent).toBe('Home'))
+    })
+
+    describe('around the router view', () => {
+      /** Creates a router with a page that fails in its setup, and a guard that throws, ready on `/`. */
+      async function createTestRouter(): Promise<Router> {
+        const router: Router = createRouter({
+          history: createMemoryHistory(),
+          routes: [
+            { path: '/', component: HomePage },
+            { path: '/setup-fails', component: FailingSetup },
+            {
+              path: '/guard-fails',
+              component: HomePage,
+              beforeEnter: () => {
+                throw new Error('Guard failed')
+              },
+            },
+          ],
+        })
+        await router.push('/')
+        return router
+      }
+
+      /** Renders the router view with a transition, in a navigation boundary. */
+      function renderPageBoundary(): VNodeChild {
+        return renderBoundary(
+          { navigation: true },
+          {
+            default: () =>
+              h(RouterView, null, {
+                default: ({ Component }: { Component: VNode | undefined }) =>
+                  h(Transition, { mode: 'out-in' }, () => Component),
+              }),
+            fallback: ({ error }) => `Fallback: ${error.message}`,
+          },
+        )
+      }
+
+      /** Navigates to the given path, ignoring the navigation error (handled by the error handling). */
+      async function navigate(router: Router, path: string): Promise<void> {
+        try {
+          await router.push(path)
+        } catch {
+          // Handled by `router.onError()`
+        }
+      }
+
+      it('displays the errors of the pages, and clears them after the next navigation', async () => {
+        const router: Router = await createTestRouter()
+        const { container } = mountInApp(renderPageBoundary, { router })
+
+        await navigate(router, '/setup-fails')
+        await vi.waitFor(() => expect(container.textContent).toBe('Fallback: Setup failed'))
+
+        await navigate(router, '/')
+        await vi.waitFor(() => expect(container.textContent).toBe('Home'))
+      })
+
+      it('displays the navigation errors', async () => {
+        const router: Router = await createTestRouter()
+        const { container } = mountInApp(renderPageBoundary, { router })
+
+        await navigate(router, '/guard-fails')
+        await vi.waitFor(() => expect(container.textContent).toBe('Fallback: Guard failed'))
+
+        await navigate(router, '/')
+        await vi.waitFor(() => expect(container.textContent).toBe('Home'))
+      })
+    })
+
+    it('gives the errors of the transition hooks to the app, and keeps the content', async () => {
+      const onUnhandledError = vi.fn()
+      const isShown: Ref<boolean> = ref(false)
+      const { container } = mountInApp(
+        () =>
+          renderBoundary(
+            {},
+            {
+              default: () =>
+                h(
+                  Transition,
+                  {
+                    onEnter: () => {
+                      throw new Error('Enter failed')
+                    },
+                  },
+                  () => (isShown.value ? h(HomePage) : null),
+                ),
+              fallback: () => 'Fallback',
+            },
+          ),
+        { onUnhandledError },
+      )
+
+      isShown.value = true
+
+      await vi.waitFor(() =>
+        expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ message: 'Enter failed', phase: 'other' }),
+        ),
+      )
+      expect(container.textContent).toBe('Home')
     })
   })
 })

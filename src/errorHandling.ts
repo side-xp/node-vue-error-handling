@@ -165,8 +165,11 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     })
 
     // Clears the errors of the navigation boundaries, so the user can leave an error with any link or the back button
-    const removeAfterEach: () => void = router.afterEach((_to, _from, failure) => {
-      if (failure) {
+    const removeAfterEach: () => void = router.afterEach((to, from, failure) => {
+      // After a navigation error, the router stays on the previous route: a link to it is a duplicated navigation (a
+      // failure), but the user still asked to display it
+      const isCurrentRoute: boolean = to.fullPath === from.fullPath
+      if (failure && !isCurrentRoute) {
         return
       }
       for (const boundary of navigationBoundaries) {

@@ -199,6 +199,53 @@ describe('navigation errors', () => {
 
       expect(container.textContent).toBe('Other')
     })
+
+    it('clear the navigation errors with a link to the current route', async () => {
+      const router: Router = await createTestRouter()
+      const { container } = mountInApp(renderRouterView(true), { router })
+
+      await navigate(router, '/guard-fails')
+      expect(container.textContent).toBe('Fallback: Guard failed')
+      // Still on `/`: a duplicated navigation
+      await navigate(router, '/')
+
+      expect(container.textContent).toBe('Home')
+    })
+
+    it('display the page again from scratch with a link to the page that failed', async () => {
+      let shouldFail = true
+      const router: Router = await createTestRouter()
+      router.addRoute({
+        path: '/flaky',
+        component: defineComponent({
+          setup() {
+            if (shouldFail) {
+              throw new Error('Setup failed')
+            }
+            return () => 'Flaky loaded'
+          },
+        }),
+      })
+      const { container } = mountInApp(renderRouterView(true), { router })
+
+      await navigate(router, '/flaky')
+      expect(container.textContent).toBe('Fallback: Setup failed')
+      shouldFail = false
+      await navigate(router, '/flaky')
+
+      expect(container.textContent).toBe('Flaky loaded')
+    })
+
+    it("don't clear the errors after the other failed navigations", async () => {
+      const router: Router = await createTestRouter()
+      router.addRoute({ path: '/aborted', component: createPage('Aborted'), beforeEnter: () => false })
+      const { container } = mountInApp(renderRouterView(true), { router })
+
+      await navigate(router, '/guard-fails')
+      await navigate(router, '/aborted')
+
+      expect(container.textContent).toBe('Fallback: Guard failed')
+    })
   })
 
   describe('installation', () => {

@@ -129,7 +129,7 @@ export type ErrorSource = CaughtError['source']
 export interface ErrorHandlingOptions {
   /** The router of the app, to handle the navigation errors. */
   router?: RouterLike
-  /** Receives every caught error that is not ignored (e.g. to plug a monitoring service). Defaults to `console.error()`. */
+  /** Receives every caught error that is not ignored (e.g. to plug a monitoring service). Defaults to `logCaughtError()`. */
   onError?: (caught: CaughtError) => void
   /**
    * Receives the caught errors that nothing else handled, after `onError()` (e.g. to display a notification).

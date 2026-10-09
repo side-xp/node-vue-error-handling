@@ -1,5 +1,6 @@
 export { ErrorBoundary } from './errorBoundary'
 export { createErrorHandling } from './errorHandling'
+export { logCaughtError } from './errorLogging'
 export { markAsHandled } from './handledErrors'
 export type {
   BoundaryError,

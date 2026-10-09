@@ -41,7 +41,18 @@ app.use(router)
 app.mount('#app')
 ```
 
-Every error is given to `onError()`, then to `onUnhandledError()` if nothing else handled it. Without `onError()`, the errors are logged with `console.error()`, with their context: where they were caught, the phase and the component trace of the component errors (Vue doesn't log it anymore once an error handler is set), the target route of the navigation errors...
+Every error is given to `onError()`, then to `onUnhandledError()` if nothing else handled it. Without `onError()`, the errors are logged with `logCaughtError()`: with `console.error()`, and their context (where they were caught, the phase and the component trace of the component errors, the target route of the navigation errors...). Vue doesn't log the component trace anymore once an error handler is set. To keep these logs with your own `onError()`, call it yourself:
+
+```ts
+import { createErrorHandling, logCaughtError } from '@side-xp/vue-error-handling'
+
+createErrorHandling({
+  onError: (caught) => {
+    logCaughtError(caught)
+    monitoring.capture(caught.error)
+  },
+})
+```
 
 > An error handler already set on the app (`app.config.errorHandler`) before installing the plugin still receives the errors. The handlers are removed when the app is unmounted.
 
@@ -57,7 +68,7 @@ The errors are caught from all their sources:
 | Errors caught by the app, and reported | `report()` (see [Report errors](#report-errors)) | `reported` |
 | Navigation guards that throw, pages that fail to load (with the `router` option) | `router.onError()` | `navigation` |
 
-> Like Vue does with the errors of the components once an error handler is set, the browser doesn't log the `promise` and `global` errors anymore: they're given to `onError()` instead, which logs them by default. If you replace `onError()` (e.g. with a monitoring service), log them yourself if you still want them in the console.
+> Like Vue does with the errors of the components once an error handler is set, the browser doesn't log the `promise` and `global` errors anymore: they're given to `onError()` instead, which logs them by default. If you replace `onError()` (e.g. with a monitoring service), call `logCaughtError()` in it if you still want them in the console.
 
 ### Error boundaries
 
@@ -228,7 +239,7 @@ The handled errors are recorded in a `WeakSet`: the error objects are not modifi
 | Option | Default | Description |
 |---|---|---|
 | `router` | | The router of the app, to handle the navigation errors |
-| `onError(caught)` | `console.error()` | Receives every error that is not ignored. The single exit point of the errors (e.g. to plug a monitoring service) |
+| `onError(caught)` | `logCaughtError()` | Receives every error that is not ignored. The single exit point of the errors (e.g. to plug a monitoring service) |
 | `onUnhandledError(caught)` | | Receives the errors nothing else handled, after `onError()` (e.g. to display a notification) |
 | `ignore(caught)` | | Returns `true` for the errors to ignore: they're given neither to `onError()` nor to `onUnhandledError()` |
 | `throttleMs` | `5000` | Minimum delay before an error with the same message is given to `onUnhandledError()` again, so a repeated error doesn't flood the screen. `0` disables it |

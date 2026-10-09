@@ -52,6 +52,8 @@
     "playground": "vite playground",
     "playground:build": "vite build playground",
     "playground:preview": "vite preview playground",
+    "playground-webpack:build": "webpack --config playground-webpack/webpack.config.mjs",
+    "playground-webpack:preview": "vite preview playground-webpack --port 4174",
     "check:package": "publint --strict && attw --pack --ignore-rules cjs-resolves-to-esm",
     "prepack": "npm run build",
     "prepublishOnly": "npm run check:package",
@@ -69,17 +71,22 @@
     "@vitejs/plugin-vue": "^6.0.9",
     "@vitest/coverage-v8": "^5.0.2",
     "@vue/test-utils": "^2.5.1",
+    "html-webpack-plugin": "^5.6.8",
     "husky": "^9.1.7",
     "jsdom": "^30.1.2",
     "lint-staged": "^17.0.4",
     "publint": "^0.3.21",
     "semantic-release": "^25.0.3",
+    "ts-loader": "^9.6.2",
     "tsdown": "^0.23.0",
     "typescript": "~6.0.3",
     "vite": "^8.3.4",
     "vitest": "^5.0.2",
     "vue": "^3.5.43",
+    "vue-loader": "^17.4.2",
     "vue-router": "^5.4.0",
-    "vue-tsc": "^3.3.12"
+    "vue-tsc": "^3.3.12",
+    "webpack": "^5.111.1",
+    "webpack-cli": "^7.2.3"
   }
 }

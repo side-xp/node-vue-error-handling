@@ -6,7 +6,7 @@
   },
   "overrides": [
     {
-      "includes": ["playground/**"],
+      "includes": ["playground/**", "playground-webpack/**"],
       "linter": {
         "rules": {
           "suspicious": {

@@ -9,6 +9,7 @@
 | [Biome](https://biomejs.dev) | Linter & formatter |
 | [Vitest](https://vitest.dev) + [jsdom](https://github.com/jsdom/jsdom) + [Vue Test Utils](https://test-utils.vuejs.org) | Testing & coverage |
 | [Vite](https://vite.dev) | Playground app |
+| [webpack](https://webpack.js.org) + [vue-loader](https://vue-loader.vuejs.org) | Webpack playground app (chunk loading failures with another bundler) |
 | [publint](https://publint.dev) + [are-the-types-wrong](https://arethetypeswrong.github.io) | Package shape & types-resolution validation |
 | [Husky](https://typicode.github.io/husky) + [lint-staged](https://github.com/lint-staged/lint-staged) | Git hooks (pre-commit, pre-push) |
 | [commitlint](https://commitlint.js.org) | Commit message linting |
@@ -33,6 +34,7 @@ src/
 playground/          # Vue app to try the library in a real app (never published)
   src/pages/         # one page per kind of error to trigger
   src/components/    # faulty components and the "Caught errors" panel
+playground-webpack/  # Vue app built with webpack, for the chunk loading failures (never published)
 dist/                # build output (gitignored)
 ```
 
@@ -52,6 +54,8 @@ dist/                # build output (gitignored)
 | `npm run playground` | Start the playground app's dev server |
 | `npm run playground:build` | Build the playground app (production build) |
 | `npm run playground:preview` | Serve the built playground app |
+| `npm run playground-webpack:build` | Build the webpack playground app (production build) |
+| `npm run playground-webpack:preview` | Serve the built webpack playground app |
 
 ## Development
 
@@ -91,10 +95,29 @@ When implementing a feature, add a way to trigger it in the playground:
 
 #### Never published
 
-The playground can never be published:
+The playgrounds (including the [webpack playground](#webpack-playground)) can never be published:
 
 - The build has a single entry (`src/index.ts`), and only bundles what it imports. The library never imports the playground.
 - Only `dist/` is published (`files` in `package.json`). Run `npm pack --dry-run` to list the published files.
+
+### Webpack playground
+
+`playground-webpack/` is a minimal Vue + Vue Router app built with webpack. It only checks what the Vite playground can't: the chunk loading failures with another bundler than Vite, which the library doesn't detect out of the box. It uses the detection documented in the README for webpack (the `isChunkLoadError` option, checking the `ChunkLoadError` name of webpack's errors), and the library from `src/` like the Vite playground.
+
+It only has a production build (the chunk loading failures don't happen with a dev server):
+
+```sh
+npm run playground-webpack:build
+npm run playground-webpack:preview
+```
+
+Then open the URL printed by Vite (`http://localhost:4174`, the built app is served by `vite preview`), and follow the steps of its home page:
+
+1. Delete the chunk of the deployed page, `playground-webpack/dist/DeployedPage.*.js`, without visiting that page first.
+2. Go to the page: its chunk fails to load, so the page is loaded again.
+3. The chunk is still missing after the reload: the page is not loaded again within 10 seconds, and the page boundary displays the error, flagged as a chunk loading failure.
+
+> `vite preview` answers the missing chunk with the `index.html` of the app (as most servers configured for the history mode of the router do). Webpack runs it as a script: the browser also reports a `SyntaxError` (`Unexpected token '<'`), caught as a `global` error, before webpack rejects the chunk with its `ChunkLoadError`. With Vite, the missing chunk only fails its `import()`.
 
 ### Linting & formatting
 

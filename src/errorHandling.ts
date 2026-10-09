@@ -245,7 +245,9 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
         )
       }
 
-      // An error handler set before this one still receives the errors
+      // An error handler set before this one (e.g. by a monitoring service) still receives the errors, as Vue gives them
+      // without the error handling: the component errors that no boundary stopped, even the ignored or already handled
+      // ones (it has its own filters)
       const previousErrorHandler: AppConfig['errorHandler'] = app.config.errorHandler
 
       // Errors of the components that no error boundary handled

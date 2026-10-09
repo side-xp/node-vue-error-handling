@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { type App, type Component, createApp, defineComponent, h, nextTick, onMounted, ref, watch } from 'vue'
+import { ErrorBoundary } from '@/errorBoundary'
 import { createErrorHandling } from '@/errorHandling'
 import { markAsHandled } from '@/handledErrors'
 import type { CaughtError, ComponentError, ErrorHandling, ErrorHandlingOptions } from '@/types'
@@ -366,6 +367,71 @@ describe('createErrorHandling()', () => {
       mountedApps.push(app)
 
       expect(previousErrorHandler).toHaveBeenCalledWith(error, expect.anything(), 'setup function')
+    })
+
+    describe('error handler set before it', () => {
+      /** Mounts the given component with an error handler set before the error handling, and returns it. */
+      function mountWithPreviousHandler(
+        component: Component,
+        options: ErrorHandlingOptions | ErrorHandling = { onError: () => {} },
+      ): Mock {
+        const previousErrorHandler: Mock = vi.fn()
+        const app: App = createApp(component)
+        app.config.warnHandler = () => {}
+        app.config.errorHandler = previousErrorHandler
+        app.use('install' in options ? options : createErrorHandling(options))
+        app.mount(document.createElement('div'))
+        mountedApps.push(app)
+        return previousErrorHandler
+      }
+
+      it('receives the ignored errors and the errors already handled, as without the error handling', () => {
+        const ignoredError: Error = new Error('Ignored')
+        const handledError: Error = new Error('Handled')
+        markAsHandled(handledError)
+        /** Creates a component that throws the given error in its setup. */
+        const createFaulty = (error: Error): Component =>
+          defineComponent({
+            setup() {
+              throw error
+            },
+          })
+
+        const previousErrorHandler: Mock = mountWithPreviousHandler(
+          defineComponent({ render: () => [h(createFaulty(ignoredError)), h(createFaulty(handledError))] }),
+          { onError: () => {}, ignore: (caught) => caught.error === ignoredError },
+        )
+
+        expect(previousErrorHandler.mock.calls.map(([error]) => error)).toEqual([ignoredError, handledError])
+      })
+
+      it("doesn't receive the errors handled by a boundary, as Vue stops them", async () => {
+        const Faulty = defineComponent({
+          setup() {
+            throw new Error('Setup failed')
+          },
+        })
+
+        const previousErrorHandler: Mock = mountWithPreviousHandler(
+          defineComponent({
+            render: () => h(ErrorBoundary, null, { default: () => h(Faulty), fallback: () => 'Fallback' }),
+          }),
+        )
+        await nextTick()
+
+        expect(previousErrorHandler).not.toHaveBeenCalled()
+      })
+
+      it("doesn't receive the errors outside of the components, as Vue doesn't give them", () => {
+        const errorHandling: ErrorHandling = createErrorHandling({ onError: () => {} })
+        const previousErrorHandler: Mock = mountWithPreviousHandler(EmptyComponent, errorHandling)
+
+        errorHandling.report(new Error('Reported'))
+        dispatchUnhandledRejection(new Error('Rejected'))
+        dispatchWindowError(new Error('Thrown'))
+
+        expect(previousErrorHandler).not.toHaveBeenCalled()
+      })
     })
 
     it('removes its handlers when the app is unmounted', () => {

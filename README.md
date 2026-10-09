@@ -55,7 +55,7 @@ createErrorHandling({
 })
 ```
 
-> An error handler already set on the app (`app.config.errorHandler`) before installing the plugin still receives the errors. The handlers are removed when the app is unmounted.
+> An error handler already set on the app (`app.config.errorHandler`, e.g. by a monitoring service) before installing the plugin still receives the errors, as Vue would give them without the plugin: the component errors that no error boundary stopped, including the ignored and already handled ones (it isn't affected by the options of the plugin). The handlers are removed when the app is unmounted.
 
 ### Caught errors
 

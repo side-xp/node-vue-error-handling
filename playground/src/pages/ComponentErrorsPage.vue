@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ErrorBoundary } from '@side-xp/vue-error-handling'
 import { ref } from 'vue'
 import FaultyComponent, { type FaultyPhase } from '../components/FaultyComponent.vue'
 
@@ -23,13 +24,22 @@ async function failInAsyncHandler(): Promise<void> {
 <template>
   <section>
     <h2>Lifecycle</h2>
-    <p>Mounts a component that fails in the given phase.</p>
+    <p>
+      Mounts a component that fails in the given phase. The phases that prevent it from being displayed (setup,
+      render, mount) are handled by its boundary, the others are notified.
+    </p>
     <div class="actions">
       <button type="button" v-for="phase in PHASES" :key="phase" @click="mountedPhase = phase">{{ phase }}</button>
       <button type="button" :disabled="!mountedPhase" @click="mountedPhase = null">Unmount</button>
     </div>
     <p v-if="mountedPhase">
-      Mounted: <FaultyComponent :key="mountedPhase" :fails-in="mountedPhase" />
+      Mounted:
+      <ErrorBoundary :key="mountedPhase">
+        <FaultyComponent :fails-in="mountedPhase" />
+        <template #fallback="{ error }">
+          <span class="fallback">{{ error.message }}</span>
+        </template>
+      </ErrorBoundary>
     </p>
   </section>
 

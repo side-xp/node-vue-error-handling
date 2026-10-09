@@ -19,7 +19,7 @@ npm install @side-xp/vue-error-handling
 
 ### Install the plugin
 
-Install the error handling on the app, **before the router**:
+Install the error handling on the app, **before the router** (so the errors of the first navigation are handled):
 
 ```ts
 import { createErrorHandling } from '@side-xp/vue-error-handling'
@@ -28,6 +28,8 @@ import { createApp } from 'vue'
 const app = createApp(App)
 app.use(
   createErrorHandling({
+    // To handle the navigation errors (optional)
+    router,
     // Every error (e.g. to plug a monitoring service)
     onError: (caught) => monitoring.capture(caught.error),
     // The errors nothing else handled (e.g. with any notification system)
@@ -52,6 +54,7 @@ The errors are caught from all their sources:
 | Promises rejected without being awaited or caught | `unhandledrejection` event | `promise` |
 | Errors thrown outside of Vue (timers, listeners added with `addEventListener()`...) | `error` event | `global` |
 | Errors caught by the app, and reported | `report()` (see [Report errors](#report-errors)) | `reported` |
+| Navigation guards that throw, pages that fail to load (with the `router` option) | `router.onError()` | `navigation` |
 
 > Like Vue does with the errors of the components once an error handler is set, the browser doesn't log the `promise` and `global` errors anymore: they're given to `onError()` instead, which logs them by default. If you replace `onError()` (e.g. with a monitoring service), log them yourself if you still want them in the console.
 
@@ -92,14 +95,38 @@ The errors handled by a boundary are still given to `onError()` (e.g. for monito
 
 | Prop | Default | Description |
 |---|---|---|
+| `navigation` | `false` | Also displays the navigation errors (see [Page boundary and navigation errors](#page-boundary-and-navigation-errors)) |
 | `filter` | `['setup', 'render', 'mount', 'asyncComponent', 'reported']` | The errors to handle: a list of phases (and `'reported'` for the reported errors), or a function that returns `true` for the errors to handle (it receives the `CaughtError`) |
 
 Both slots receive the `error` (`null` in the `default` slot when there's none), and the actions:
 
-- `retry()`: clears the error, and displays the content again from scratch (e.g. an async component loads again).
+- `retry()`: clears the error, and displays the content again from scratch (e.g. an async component loads again). For a navigation error, navigates to the page again.
 - `clear()`: clears the error, without displaying the content again from scratch.
 
 > The errors of the `fallback` slot continue to the parent boundaries. The errors of plain elements and template expressions placed directly in the boundary are handled too (Vue normally skips the boundary for them: the boundary renders its content through an internal child component to prevent it).
+
+### Page boundary and navigation errors
+
+Wrap the router view with a boundary to handle the errors of the pages (e.g. in `App.vue`). With the `navigation` prop, it also displays the navigation errors (a navigation guard that throws, a page that fails to load), which no component threw:
+
+```vue
+<template>
+  <AppHeader />
+  <ErrorBoundary navigation>
+    <RouterView />
+    <template #fallback="{ error, retry }">
+      <p>This page can't be displayed.</p>
+      <button @click="retry">Retry</button>
+    </template>
+  </ErrorBoundary>
+</template>
+```
+
+- `retry()` navigates to the page again if it failed to load, or displays it again from scratch.
+- The error is cleared after each successful navigation: the user can leave it with any link, or the back button of the browser.
+- Without a navigation boundary (or without its `fallback` slot), the navigation errors go to `onUnhandledError()`.
+
+> Use a single navigation boundary (e.g. around the root router view, not the nested ones): a navigation that fails aborts the whole navigation. With several, the first one mounted displays the errors.
 
 ### Report errors
 
@@ -166,6 +193,7 @@ The handled errors are recorded in a `WeakSet`: the error objects are not modifi
 
 | Option | Default | Description |
 |---|---|---|
+| `router` | | The router of the app, to handle the navigation errors |
 | `onError(caught)` | `console.error()` | Receives every error that is not ignored. The single exit point of the errors (e.g. to plug a monitoring service) |
 | `onUnhandledError(caught)` | | Receives the errors nothing else handled, after `onError()` (e.g. to display a notification) |
 | `ignore(caught)` | | Returns `true` for the errors to ignore: they're given neither to `onError()` nor to `onUnhandledError()` |
@@ -213,6 +241,7 @@ The errors thrown by the components, caught by Vue: setup, render, lifecycle hoo
 | `promise` | `event`: the `unhandledrejection` event (e.g. to get the rejected `promise`) |
 | `global` | `event`: the `error` event (e.g. to get the file and line of the error). For a script loaded from another origin without CORS, the browser hides the error: `error` is `null`, and `message` is `'Script error.'` |
 | `reported` | `instance`: the component that reported the error with `useErrorHandling()`, or `null` when reported with the `report()` of `createErrorHandling()` |
+| `navigation` | `to`: the route the navigation was going to. `from`: the route it was coming from |
 
 ## Contributing
 

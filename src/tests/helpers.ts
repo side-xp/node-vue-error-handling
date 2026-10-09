@@ -27,7 +27,10 @@ export const FailingButton = defineComponent({
   },
 })
 
-/** Mounts the given render function in an app with the error handling installed. Returns the app and its container. */
+/**
+ * Mounts the given render function in an app with the error handling installed, and the router of the options if any.
+ * Returns the app and its container.
+ */
 export function mountInApp(
   render: () => VNodeChild,
   options: ErrorHandlingOptions = {},
@@ -37,6 +40,9 @@ export function mountInApp(
   // Vue warns about the components that can't render after an error
   app.config.warnHandler = () => {}
   app.use(createErrorHandling({ onError: () => {}, ...options }))
+  if (options.router) {
+    app.use(options.router)
+  }
   app.mount(container)
   mountedApps.push(app)
   return { app, container }

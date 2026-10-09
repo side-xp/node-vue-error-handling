@@ -18,14 +18,16 @@ import {
   type VNodeChild,
 } from 'vue'
 import { createComponentError } from './caughtErrors'
-import { type ErrorHandlingContext, injectErrorHandling } from './errorHandling'
+import { type ErrorHandlingContext, injectErrorHandling, type NavigationBoundaryHandle } from './errorHandling'
 import { callSafely } from './safeCalls'
 import type {
   BoundaryError,
+  ComponentError,
   ErrorBoundaryActions,
   ErrorBoundaryProps,
   ErrorBoundarySlots,
   ErrorFilter,
+  NavigationError,
   ReportedError,
   VuePhase,
 } from './types'
@@ -49,14 +51,15 @@ const DEFAULT_FILTER: ErrorFilter = [...BREAKING_PHASES, 'reported']
 
 /**
  * Checks if an error prevents the content from being displayed.
- * A reported error does: the component reports it because it can't work properly anymore.
+ * A reported error does: the component reports it because it can't work properly anymore. A navigation error does
+ * too: the page couldn't be loaded.
  */
 function isBreakingError(caught: BoundaryError): boolean {
-  return caught.source === 'reported' || BREAKING_PHASES.has(caught.phase)
+  return caught.source !== 'component' || BREAKING_PHASES.has(caught.phase)
 }
 
 /** Checks if an error matches the given filter. A filter function that fails doesn't match, so the error continues. */
-function matchesFilter(caught: BoundaryError, filter: ErrorFilter): boolean {
+function matchesFilter(caught: ComponentError | ReportedError, filter: ErrorFilter): boolean {
   if (typeof filter === 'function') {
     return callSafely(filter, caught) === true
   }
@@ -88,6 +91,8 @@ const ErrorBoundaryContent = defineComponent(
  *   `fallback` slot.
  * - The other handled errors are given to the `default` slot, to display them next to the content.
  * - The errors it doesn't handle continue to the parent boundaries, then to the app.
+ *
+ * A navigation boundary (`navigation` prop) also displays the navigation errors.
  */
 export const ErrorBoundary = defineComponent(
   (props: ErrorBoundaryProps, { slots }) => {
@@ -124,7 +129,11 @@ export const ErrorBoundary = defineComponent(
 
     /** Checks if this boundary handles the given error, and can display it. */
     function canHandle(caught: BoundaryError): boolean {
-      if (!matchesFilter(caught, props.filter ?? DEFAULT_FILTER)) {
+      const isAccepted: boolean =
+        caught.source === 'navigation'
+          ? props.navigation === true
+          : matchesFilter(caught, props.filter ?? DEFAULT_FILTER)
+      if (!isAccepted) {
         return false
       }
       // Without a fallback, the content can't be replaced: a parent boundary may do it
@@ -161,10 +170,27 @@ export const ErrorBoundary = defineComponent(
       },
     }
 
+    if (props.navigation) {
+      const navigationHandle: NavigationBoundaryHandle = {
+        handleNavigationError: (caught: NavigationError): boolean => tryHandle(caught),
+
+        clearAfterNavigation(): void {
+          error.value = null
+        },
+      }
+      onUnmounted(context.registerNavigationBoundary(navigationHandle))
+    }
+
     const actions: ErrorBoundaryActions = {
       retry(): void {
+        const retriedError: BoundaryError | null = error.value
         error.value = null
-        contentKey.value++
+        // The page wasn't loaded: navigating to it again loads it from scratch
+        if (retriedError?.source === 'navigation') {
+          void context.retryNavigation(retriedError)
+        } else {
+          contentKey.value++
+        }
       },
 
       clear(): void {
@@ -186,6 +212,7 @@ export const ErrorBoundary = defineComponent(
     name: 'ErrorBoundary',
     props: {
       filter: { type: [Array, Function] as PropType<ErrorFilter>, required: false },
+      navigation: { type: Boolean, default: false },
     },
     slots: Object as SlotsType<ErrorBoundarySlots>,
   },

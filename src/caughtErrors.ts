@@ -1,5 +1,6 @@
 import type { ComponentPublicInstance } from 'vue'
-import type { ComponentError, GlobalError, PromiseRejectionError, ReportedError } from './types'
+import type { RouteLocationNormalized, RouteLocationNormalizedLoaded } from 'vue-router'
+import type { ComponentError, GlobalError, NavigationError, PromiseRejectionError, ReportedError } from './types'
 import { getVuePhase } from './vuePhases'
 
 /** Gets a readable message from any thrown value. */
@@ -50,6 +51,21 @@ export function createGlobalError(event: ErrorEvent): GlobalError {
     // The error is hidden for the scripts of other origins, but the event still has a message
     message: event.error == null ? event.message : getErrorMessage(event.error),
     event,
+  }
+}
+
+/** Creates the normalized error of a navigation that failed. */
+export function createNavigationError(
+  error: unknown,
+  to: RouteLocationNormalized,
+  from: RouteLocationNormalizedLoaded,
+): NavigationError {
+  return {
+    source: 'navigation',
+    error,
+    message: getErrorMessage(error),
+    to,
+    from,
   }
 }
 

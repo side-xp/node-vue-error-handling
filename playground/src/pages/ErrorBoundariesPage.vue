@@ -115,8 +115,8 @@ function save(): void {
         <button type="button" @click="retry">Reconnect</button>
       </template>
     </ErrorBoundary>
-    <h3>Outside of a boundary</h3>
-    <p>The errors go to the app, which displays a notification.</p>
+    <h3>Without a closer boundary</h3>
+    <p>The errors go to the page boundary of the playground (around the router view), which replaces the whole page.</p>
     <LiveFeed />
   </section>
 </template>

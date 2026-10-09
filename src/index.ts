@@ -13,6 +13,7 @@ export type {
   ErrorHandlingOptions,
   ErrorSource,
   GlobalError,
+  NavigationError,
   PromiseRejectionError,
   ReportedError,
   UseErrorHandlingReturn,

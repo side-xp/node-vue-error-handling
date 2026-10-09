@@ -2,15 +2,24 @@ import { type App, type AppConfig, type InjectionKey, inject } from 'vue'
 import {
   createComponentError,
   createGlobalError,
+  createNavigationError,
   createPromiseRejectionError,
   createReportedError,
 } from './caughtErrors'
 import { isHandled, markAsHandled } from './handledErrors'
 import { callSafely, logError } from './safeCalls'
-import type { CaughtError, ErrorHandling, ErrorHandlingOptions } from './types'
+import type { CaughtError, ErrorHandling, ErrorHandlingOptions, NavigationError } from './types'
 
 /** Default minimum delay before an error with the same message is given to `onUnhandledError()` again. */
 const DEFAULT_THROTTLE_MS = 5_000
+
+/** What the error handling gets from a navigation boundary, to give it the navigation errors. */
+export interface NavigationBoundaryHandle {
+  /** Displays the given navigation error, if the boundary can. Returns `true` if it handled it. */
+  handleNavigationError(caught: NavigationError): boolean
+  /** Clears the error of the boundary, after a successful navigation. */
+  clearAfterNavigation(): void
+}
 
 /** What the error boundaries and `useErrorHandling()` get from the error handling installed on the app. */
 export interface ErrorHandlingContext {
@@ -20,6 +29,10 @@ export interface ErrorHandlingContext {
   handleBoundaryError(caught: CaughtError): void
   /** Gives an error that no error boundary handled to the app, unless it was already handled or it's ignored. */
   handleUnhandledError(caught: CaughtError): void
+  /** Registers a navigation boundary, to give it the navigation errors. Returns a function that unregisters it. */
+  registerNavigationBoundary(boundary: NavigationBoundaryHandle): () => void
+  /** Navigates again to the page of the given navigation error. */
+  retryNavigation(caught: NavigationError): Promise<void>
 }
 
 /** Injection key of the error handling installed on the app. */
@@ -41,7 +54,10 @@ function logCaughtError(caught: CaughtError): void {
 
 /** Creates the error handling of an app: catches the errors, normalizes them, and gives them to the app. */
 export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHandling {
-  const { onError = logCaughtError, onUnhandledError, ignore, throttleMs = DEFAULT_THROTTLE_MS } = options
+  const { router, onError = logCaughtError, onUnhandledError, ignore, throttleMs = DEFAULT_THROTTLE_MS } = options
+
+  /** Navigation boundaries currently mounted, in the order they were mounted. */
+  const navigationBoundaries: Set<NavigationBoundaryHandle> = new Set()
 
   /** Timestamp of the last time an error with each message was given to `onUnhandledError()`. */
   const lastUnhandledTimestamps: Map<string, number> = new Map()
@@ -110,6 +126,39 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     }
   }
 
+  /** Registers the handlers of the navigation errors. Returns a function that removes them. */
+  function handleNavigationErrors(): () => void {
+    if (!router) {
+      return () => {}
+    }
+
+    const removeErrorHandler: () => void = router.onError((error, to, from) => {
+      const caught: NavigationError = createNavigationError(error, to, from)
+      // No component threw it: it can only be displayed by a navigation boundary
+      for (const boundary of navigationBoundaries) {
+        if (boundary.handleNavigationError(caught)) {
+          return
+        }
+      }
+      handleError(caught)
+    })
+
+    // Clears the errors of the navigation boundaries, so the user can leave an error with any link or the back button
+    const removeAfterEach: () => void = router.afterEach((_to, _from, failure) => {
+      if (failure) {
+        return
+      }
+      for (const boundary of navigationBoundaries) {
+        boundary.clearAfterNavigation()
+      }
+    })
+
+    return () => {
+      removeErrorHandler()
+      removeAfterEach()
+    }
+  }
+
   const context: ErrorHandlingContext = {
     isIgnored,
 
@@ -122,6 +171,21 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     },
 
     handleUnhandledError: handleError,
+
+    registerNavigationBoundary(boundary: NavigationBoundaryHandle): () => void {
+      navigationBoundaries.add(boundary)
+      return () => {
+        navigationBoundaries.delete(boundary)
+      }
+    },
+
+    async retryNavigation(caught: NavigationError): Promise<void> {
+      try {
+        await router?.push(caught.to.fullPath)
+      } catch {
+        // A new navigation error is handled by `router.onError()`
+      }
+    },
   }
 
   return {
@@ -138,9 +202,11 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
         }
       }
 
-      const removeWindowHandlers: () => void = handleWindowErrors()
+      const removeHandlers: (() => void)[] = [handleWindowErrors(), handleNavigationErrors()]
       app.onUnmount(() => {
-        removeWindowHandlers()
+        for (const removeHandler of removeHandlers) {
+          removeHandler()
+        }
         app.config.errorHandler = previousErrorHandler
       })
 

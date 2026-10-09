@@ -19,6 +19,8 @@ function describeContext(caught: CaughtError): string {
       return `Thrown outside of Vue, at ${caught.event.filename || 'unknown file'}:${caught.event.lineno}`
     case 'reported':
       return caught.instance ? `Reported by <${getComponentName(caught.instance)}>` : 'Reported by the app'
+    case 'navigation':
+      return `Navigation from ${caught.from.fullPath} to ${caught.to.fullPath}`
   }
 }
 </script>

@@ -1,4 +1,5 @@
 import type { App, ComponentPublicInstance, VNodeChild } from 'vue'
+import type { RouteLocationNormalized, RouteLocationNormalizedLoaded, Router } from 'vue-router'
 
 /** Phase of a component in which Vue caught an error, normalized from the different forms of the `info` given by Vue. */
 export type VuePhase =
@@ -67,14 +68,25 @@ export interface ReportedError extends CaughtErrorBase {
   instance: ComponentPublicInstance | null
 }
 
+/** A navigation that failed: a navigation guard threw, or a page failed to load. */
+export interface NavigationError extends CaughtErrorBase {
+  source: 'navigation'
+  /** The route the navigation was going to. */
+  to: RouteLocationNormalized
+  /** The route the navigation was coming from. */
+  from: RouteLocationNormalizedLoaded
+}
+
 /** An error caught by the error handling, with the context it was caught in. Narrow it with its `source`. */
-export type CaughtError = ComponentError | PromiseRejectionError | GlobalError | ReportedError
+export type CaughtError = ComponentError | PromiseRejectionError | GlobalError | ReportedError | NavigationError
 
 /** Where an error was caught. */
 export type ErrorSource = CaughtError['source']
 
 /** Options of the error handling. */
 export interface ErrorHandlingOptions {
+  /** The router of the app, to handle the navigation errors. */
+  router?: Router
   /** Receives every caught error that is not ignored (e.g. to plug a monitoring service). Defaults to `console.error()`. */
   onError?: (caught: CaughtError) => void
   /**
@@ -111,14 +123,14 @@ export interface UseErrorHandlingReturn {
   report(error: unknown): void
 }
 
-/** An error that error boundaries can handle: thrown by a component, or reported by a component. */
-export type BoundaryError = ComponentError | ReportedError
+/** An error that error boundaries can handle: thrown or reported by a component, or a navigation error. */
+export type BoundaryError = ComponentError | ReportedError | NavigationError
 
 /**
  * The errors an error boundary handles: a list of phases (and `'reported'` for the reported errors), or a function
- * that returns `true` for the errors to handle.
+ * that returns `true` for the errors to handle. The navigation errors are handled with the `navigation` prop instead.
  */
-export type ErrorFilter = (VuePhase | 'reported')[] | ((caught: BoundaryError) => boolean)
+export type ErrorFilter = (VuePhase | 'reported')[] | ((caught: ComponentError | ReportedError) => boolean)
 
 /** Props of the `ErrorBoundary` component. */
 export interface ErrorBoundaryProps {
@@ -128,11 +140,20 @@ export interface ErrorBoundaryProps {
    * and the reported errors.
    */
   filter?: ErrorFilter
+  /**
+   * Makes this boundary display the navigation errors (e.g. around the router view): a navigation guard that threw,
+   * or a page that failed to load. Its error is cleared after each successful navigation.
+   * Use a single navigation boundary: with several, the first one mounted displays the errors.
+   */
+  navigation?: boolean
 }
 
 /** Actions given to the slots of an error boundary. */
 export interface ErrorBoundaryActions {
-  /** Clears the error, and displays the content again from scratch (e.g. an async component loads again). */
+  /**
+   * Clears the error, and displays the content again from scratch (e.g. an async component loads again).
+   * For a navigation error, navigates to the page again.
+   */
   retry(): void
   /** Clears the error, without displaying the content again from scratch. */
   clear(): void

@@ -1,21 +1,55 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { type App, type Component, createApp, defineComponent, h, nextTick, onMounted, ref, watch } from 'vue'
 import { createErrorHandling } from '@/errorHandling'
-import type { CaughtError, ErrorHandlingOptions } from '@/types'
+import { markAsHandled } from '@/handledErrors'
+import type { CaughtError, ComponentError, ErrorHandling, ErrorHandlingOptions } from '@/types'
 
 /** Apps mounted by the current test, unmounted after it. */
 const mountedApps: App[] = []
 
-/** Mounts the given component in an app with the error handling installed. */
-function mountWithErrorHandling(component: Component, options: ErrorHandlingOptions = {}): HTMLElement {
+/** A component that renders nothing, for the tests that only need an app. */
+const EmptyComponent = defineComponent({ render: () => null })
+
+/**
+ * Mounts the given component in an app with the error handling installed.
+ * Takes the options of the error handling, or the error handling itself.
+ */
+function mountWithErrorHandling(component: Component, options: ErrorHandlingOptions | ErrorHandling = {}): HTMLElement {
   const container: HTMLElement = document.createElement('div')
   const app: App = createApp(component)
   // Vue warns about the components that can't render after an error
   app.config.warnHandler = () => {}
-  app.use(createErrorHandling(options))
+  app.use('install' in options ? options : createErrorHandling(options))
   app.mount(container)
   mountedApps.push(app)
   return container
+}
+
+/** Dispatches the event of a promise rejected without being caught, as the browser does. */
+function dispatchUnhandledRejection(reason: unknown): PromiseRejectionEvent {
+  const promise: Promise<never> = Promise.reject(reason)
+  // Prevents an actual unhandled rejection in the test runner
+  promise.catch(() => {})
+
+  const event: PromiseRejectionEvent = new PromiseRejectionEvent('unhandledrejection', {
+    promise,
+    reason,
+    cancelable: true,
+  })
+  window.dispatchEvent(event)
+  return event
+}
+
+/** Dispatches the event of an error thrown outside of Vue, as the browser does. */
+function dispatchWindowError(error: unknown, message: string = getMessage(error)): ErrorEvent {
+  const event: ErrorEvent = new ErrorEvent('error', { error, message, cancelable: true })
+  window.dispatchEvent(event)
+  return event
+}
+
+/** Gets the message of the given error, as the browser gives it to the `error` event. */
+function getMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 /** Mounts a button that throws an error with the given message when clicked. Returns a function that clicks it. */
@@ -39,10 +73,10 @@ function mountErrorTrigger(options: ErrorHandlingOptions): (message: string) => 
   }
 }
 
-/** Mounts the given component, and returns the errors given to `onError()`. */
-function collectErrors(component: Component): CaughtError[] {
-  const caughtErrors: CaughtError[] = []
-  mountWithErrorHandling(component, { onError: (caught) => caughtErrors.push(caught) })
+/** Mounts the given component, and returns the component errors given to `onError()`. */
+function collectErrors(component: Component): ComponentError[] {
+  const caughtErrors: ComponentError[] = []
+  mountWithErrorHandling(component, { onError: (caught) => caught.source === 'component' && caughtErrors.push(caught) })
   return caughtErrors
 }
 
@@ -102,8 +136,10 @@ describe('createErrorHandling()', () => {
         },
       })
 
-      const caughtErrors: CaughtError[] = []
-      const container: HTMLElement = mountWithErrorHandling(Faulty, { onError: (caught) => caughtErrors.push(caught) })
+      const caughtErrors: ComponentError[] = []
+      const container: HTMLElement = mountWithErrorHandling(Faulty, {
+        onError: (caught) => caught.source === 'component' && caughtErrors.push(caught),
+      })
       container.querySelector('button')?.click()
       watched.value++
       await nextTick()
@@ -307,6 +343,115 @@ describe('createErrorHandling()', () => {
       mountedApps.push(app)
 
       expect(previousErrorHandler).toHaveBeenCalledWith(error, expect.anything(), 'setup function')
+    })
+
+    it('removes its handlers when the app is unmounted', () => {
+      const onError = vi.fn()
+      const previousErrorHandler = vi.fn()
+      const app: App = createApp(defineComponent({ render: () => null }))
+      app.config.errorHandler = previousErrorHandler
+      app.use(createErrorHandling({ onError }))
+      app.mount(document.createElement('div'))
+
+      app.unmount()
+      // Not an `error` event: Vitest reports the ones nothing prevents as uncaught errors
+      dispatchUnhandledRejection(new Error('After unmount'))
+
+      expect(onError).not.toHaveBeenCalled()
+      expect(app.config.errorHandler).toBe(previousErrorHandler)
+    })
+  })
+
+  describe('errors outside of Vue', () => {
+    it('catches the promises rejected without being caught', () => {
+      const onError = vi.fn()
+      const reason: Error = new Error('Request failed')
+      mountWithErrorHandling(EmptyComponent, { onError })
+
+      const event: PromiseRejectionEvent = dispatchUnhandledRejection(reason)
+
+      expect(onError).toHaveBeenCalledExactlyOnceWith({
+        source: 'promise',
+        error: reason,
+        message: 'Request failed',
+        event,
+      })
+      // The browser doesn't log it a second time
+      expect(event.defaultPrevented).toBe(true)
+    })
+
+    it('catches the errors thrown outside of Vue', () => {
+      const onError = vi.fn()
+      const error: Error = new Error('Timer failed')
+      mountWithErrorHandling(EmptyComponent, { onError })
+
+      const event: ErrorEvent = dispatchWindowError(error)
+
+      expect(onError).toHaveBeenCalledExactlyOnceWith({ source: 'global', error, message: 'Timer failed', event })
+      expect(event.defaultPrevented).toBe(true)
+    })
+
+    it('uses the message of the event when the browser hides the error of a script from another origin', () => {
+      const onError = vi.fn()
+      mountWithErrorHandling(EmptyComponent, { onError })
+
+      dispatchWindowError(null, 'Script error.')
+
+      expect(onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ error: null, message: 'Script error.' }),
+      )
+    })
+
+    it('handles the reported errors', () => {
+      const onError = vi.fn()
+      const onUnhandledError = vi.fn()
+      const error: Error = new Error('Save failed')
+      const errorHandling: ErrorHandling = createErrorHandling({ onError, onUnhandledError })
+      mountWithErrorHandling(EmptyComponent, errorHandling)
+
+      errorHandling.report(error)
+
+      const caught: CaughtError = { source: 'reported', error, message: 'Save failed' }
+      expect(onError).toHaveBeenCalledExactlyOnceWith(caught)
+      expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(caught)
+    })
+  })
+
+  describe('handled errors', () => {
+    it('handles an error only once, even if it reaches several handlers', () => {
+      const onError = vi.fn()
+      const error: Error = new Error('Save failed')
+      const errorHandling: ErrorHandling = createErrorHandling({ onError })
+      mountWithErrorHandling(EmptyComponent, errorHandling)
+
+      errorHandling.report(error)
+      // e.g. rethrown after being reported
+      const event: ErrorEvent = dispatchWindowError(error)
+
+      expect(onError).toHaveBeenCalledOnce()
+      expect(event.defaultPrevented).toBe(true)
+    })
+
+    it('ignores the errors marked as handled', () => {
+      const onError = vi.fn()
+      const error: Error = new Error('Already handled')
+      mountWithErrorHandling(EmptyComponent, { onError })
+
+      markAsHandled(error)
+      dispatchUnhandledRejection(error)
+
+      expect(onError).not.toHaveBeenCalled()
+    })
+
+    it('handles the primitive values every time, since they cannot be recorded', () => {
+      const onError = vi.fn()
+      const errorHandling: ErrorHandling = createErrorHandling({ onError })
+      mountWithErrorHandling(EmptyComponent, errorHandling)
+
+      errorHandling.report('Failed')
+      errorHandling.report('Failed')
+
+      expect(onError).toHaveBeenCalledTimes(2)
     })
   })
 })

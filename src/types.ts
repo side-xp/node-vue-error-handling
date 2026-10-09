@@ -42,8 +42,31 @@ export interface ComponentError extends CaughtErrorBase {
   instance: ComponentPublicInstance | null
 }
 
+/** A promise rejected without being awaited or caught. */
+export interface PromiseRejectionError extends CaughtErrorBase {
+  source: 'promise'
+  /** The `unhandledrejection` event dispatched by the browser (e.g. to get the rejected `promise`). */
+  event: PromiseRejectionEvent
+}
+
+/** An error thrown outside of Vue (e.g. in a timer, or in a listener added with `addEventListener()`). */
+export interface GlobalError extends CaughtErrorBase {
+  source: 'global'
+  /**
+   * The `error` event dispatched by the browser (e.g. to get the file and line of the error).
+   * For a script loaded from another origin without CORS, the browser hides the error: `error` is `null`, and the
+   * message is `'Script error.'`.
+   */
+  event: ErrorEvent
+}
+
+/** An error reported with `report()`. */
+export interface ReportedError extends CaughtErrorBase {
+  source: 'reported'
+}
+
 /** An error caught by the error handling, with the context it was caught in. Narrow it with its `source`. */
-export type CaughtError = ComponentError
+export type CaughtError = ComponentError | PromiseRejectionError | GlobalError | ReportedError
 
 /** Where an error was caught. */
 export type ErrorSource = CaughtError['source']
@@ -68,6 +91,8 @@ export interface ErrorHandlingOptions {
 
 /** The error handling of an app, to install as a Vue plugin with `app.use()`. */
 export interface ErrorHandling {
-  /** Registers the error handlers on the app. */
+  /** Registers the error handlers on the app and the window. They're removed when the app is unmounted. */
   install(app: App): void
+  /** Reports an error caught by the app (e.g. in a `try...catch`), so it's handled like the others. */
+  report(error: unknown): void
 }

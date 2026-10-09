@@ -1,5 +1,13 @@
 import type { App, AppConfig, ComponentPublicInstance } from 'vue'
-import type { CaughtError, ComponentError, ErrorHandling, ErrorHandlingOptions } from './types'
+import { isHandled, markAsHandled } from './handledErrors'
+import type {
+  CaughtError,
+  ComponentError,
+  ErrorHandling,
+  ErrorHandlingOptions,
+  GlobalError,
+  PromiseRejectionError,
+} from './types'
 import { getVuePhase } from './vuePhases'
 
 /** Default minimum delay before an error with the same message is given to `onUnhandledError()` again. */
@@ -30,6 +38,27 @@ function createComponentError(error: unknown, instance: ComponentPublicInstance 
     phase: getVuePhase(info),
     vueInfo: info,
     instance,
+  }
+}
+
+/** Creates the normalized error of a promise rejected without being caught. */
+function createPromiseRejectionError(event: PromiseRejectionEvent): PromiseRejectionError {
+  return {
+    source: 'promise',
+    error: event.reason,
+    message: getErrorMessage(event.reason),
+    event,
+  }
+}
+
+/** Creates the normalized error of an error thrown outside of Vue. */
+function createGlobalError(event: ErrorEvent): GlobalError {
+  return {
+    source: 'global',
+    error: event.error,
+    // The error is hidden for the scripts of other origins, but the event still has a message
+    message: event.error == null ? event.message : getErrorMessage(event.error),
+    event,
   }
 }
 
@@ -87,8 +116,14 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     return false
   }
 
-  /** Gives a caught error to the app, unless it's ignored. */
+  /** Gives a caught error to the app, unless it was already handled or it's ignored. */
   function handleError(caught: CaughtError): void {
+    // The same error can reach several handlers (e.g. reported, then rethrown)
+    if (isHandled(caught.error)) {
+      return
+    }
+    markAsHandled(caught.error)
+
     // An `ignore()` that fails doesn't ignore the error, so it can't disappear silently
     if (ignore && callSafely(ignore, caught) === true) {
       return
@@ -98,6 +133,29 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     // Also prevents an infinite loop if `onUnhandledError()` itself causes the same error
     if (onUnhandledError && !isThrottled(caught.message)) {
       callSafely(onUnhandledError, caught)
+    }
+  }
+
+  /** Registers the handlers of the errors thrown outside of Vue. Returns a function that removes them. */
+  function handleWindowErrors(): () => void {
+    // Promises rejected without being awaited or caught
+    const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
+      // The error is given to `onError()` instead, which logs it by default (as Vue does with the component errors)
+      event.preventDefault()
+      handleError(createPromiseRejectionError(event))
+    }
+
+    // Errors thrown outside of Vue (e.g. in timers, or in listeners added with `addEventListener()`)
+    const onWindowError = (event: ErrorEvent): void => {
+      event.preventDefault()
+      handleError(createGlobalError(event))
+    }
+
+    window.addEventListener('unhandledrejection', onUnhandledRejection)
+    window.addEventListener('error', onWindowError)
+    return () => {
+      window.removeEventListener('unhandledrejection', onUnhandledRejection)
+      window.removeEventListener('error', onWindowError)
     }
   }
 
@@ -114,6 +172,16 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
           callSafely(previousErrorHandler, error, instance, info)
         }
       }
+
+      const removeWindowHandlers: () => void = handleWindowErrors()
+      app.onUnmount(() => {
+        removeWindowHandlers()
+        app.config.errorHandler = previousErrorHandler
+      })
+    },
+
+    report(error: unknown): void {
+      handleError({ source: 'reported', error, message: getErrorMessage(error) })
     },
   }
 }

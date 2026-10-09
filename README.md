@@ -131,6 +131,39 @@ Both slots receive the `error` (`null` in the `default` slot when there's none),
 
 > The errors of the `fallback` slot continue to the parent boundaries. The errors of plain elements and template expressions placed directly in the boundary are handled too (Vue normally skips the boundary for them: the boundary renders its content through an internal child component to prevent it).
 
+### Built-in components
+
+**`<Suspense>`**: the errors of the async setups (`async setup()`, top-level `await` in `<script setup>`) are handled like the other `setup` errors. Place the boundary **around** the `<Suspense>` (see [Known issues](#known-issues)): `retry()` then displays it again from scratch, and the async setups run again.
+
+```vue
+<ErrorBoundary>
+  <Suspense>
+    <Dashboard />
+    <template #fallback>Loading...</template>
+  </Suspense>
+  <template #fallback="{ retry }">
+    <button @click="retry">Retry</button>
+  </template>
+</ErrorBoundary>
+```
+
+**`<KeepAlive>`**: where the boundary is placed decides what is kept:
+
+- A boundary **around** the `<KeepAlive>` replaces it with its fallback, cache included: after `retry()`, the cached components start from scratch.
+- A boundary **inside** the `<KeepAlive>` (cached with the component it wraps) keeps its error while deactivated: it still displays its fallback when activated again, until `retry()`. The other cached components are kept.
+- The errors of the `activated` and `deactivated` hooks have the `hook` phase: they leave the content, and continue to the app unless a boundary's `filter` accepts them.
+
+```vue
+<KeepAlive>
+  <ErrorBoundary :key="tab">
+    <component :is="tabs[tab]" />
+    <template #fallback="{ retry }">
+      <button @click="retry">Retry</button>
+    </template>
+  </ErrorBoundary>
+</KeepAlive>
+```
+
 ### Page boundary and navigation errors
 
 Wrap the router view with a boundary to handle the errors of the pages (e.g. in `App.vue`). With the `navigation` prop, it also displays the navigation errors (a navigation guard that throws, a page that fails to load), which no component threw:
@@ -303,6 +336,10 @@ The errors thrown by the components, caught by Vue: setup, render, lifecycle hoo
 | `global` | `event`: the `error` event (e.g. to get the file and line of the error). For a script loaded from another origin without CORS, the browser hides the error: `error` is `null`, and `message` is `'Script error.'` |
 | `reported` | `instance`: the component that reported the error with `useErrorHandling()`, or `null` when reported with the `report()` of `createErrorHandling()` |
 | `navigation` | `to`: the route the navigation was going to. `from`: the route it was coming from. Both are `RouteLike`: their common properties (`fullPath`, `path`, `name`, `params`, `query`, `hash`, `meta`), so the package doesn't need the types of Vue Router. For the full route, resolve it with `router.resolve(caught.to.fullPath)` |
+
+## Known issues
+
+- **Boundary inside a `<Suspense>` that is still loading**: it can't replace an async setup that fails with its fallback. Vue renders the failed component after its error, while the boundary already replaced it, and crashes (`Cannot read properties of null (reading 'insertBefore')`). It happens with any `onErrorCaptured()` hook, even without this package. Place the boundary around the `<Suspense>` instead. Once the `<Suspense>` is resolved, the boundaries inside it work as usual.
 
 ## Contributing
 

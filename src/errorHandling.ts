@@ -231,6 +231,20 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
 
   return {
     install(app: App): void {
+      // Vue already skips the same plugin installed twice, but not 2 error handlings (each error would go through both)
+      if (app.runWithContext(() => inject(ERROR_HANDLING_KEY, undefined))) {
+        warn(
+          `${LOG_PREFIX} The error handling is already installed on this app: this one is skipped. Install a single \`createErrorHandling()\` per app.`,
+        )
+        return
+      }
+      // Installing the router starts the first navigation: its errors would be missed
+      if (router && app.config.globalProperties.$router !== undefined) {
+        warn(
+          `${LOG_PREFIX} The error handling is installed after the router: the errors of the first navigation may be missed. Install it before the router (\`app.use(errorHandling)\`, then \`app.use(router)\`).`,
+        )
+      }
+
       // An error handler set before this one still receives the errors
       const previousErrorHandler: AppConfig['errorHandler'] = app.config.errorHandler
 

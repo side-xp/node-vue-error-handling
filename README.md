@@ -131,11 +131,13 @@ Both slots receive the `error` (`null` in the `default` slot when there's none),
 
 > The errors of the `fallback` slot continue to the parent boundaries. The errors of plain elements and template expressions placed directly in the boundary are handled too (Vue normally skips the boundary for them: the boundary renders its content through an internal child component to prevent it).
 
-In development, the package warns (like Vue, through `app.config.warnHandler`) about the boundaries that can't work as intended:
+In development, the package warns about the boundaries that can't work as intended (with Vue's warnings: through `app.config.warnHandler` if set, otherwise in the console):
 
 - A boundary without a `fallback` slot that can never handle an error: with the `navigation` prop, or with a `filter` that only accepts the errors that need a fallback (e.g. the default one).
 - A `navigation` boundary without the `router` option of `createErrorHandling()`.
 - Several navigation boundaries mounted at once.
+
+It also warns when the error handling is installed after the router (the errors of the first navigation may be missed), or twice on the same app (the second one is skipped). These are given to the console, like Vue's own warnings at install.
 
 ### Built-in components
 

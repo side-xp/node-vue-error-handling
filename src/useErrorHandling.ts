@@ -20,7 +20,7 @@ export function useErrorHandling(): UseErrorHandlingReturn {
 
   return {
     report(error: unknown): void {
-      const caught: ReportedError = createReportedError(error, instance)
+      const caught: ReportedError = createReportedError(error, instance, context.isChunkLoadError)
       for (let current: ErrorBoundaryHandle | null = boundary; current; current = current.parent) {
         if (current.handleReportedError(caught)) {
           return

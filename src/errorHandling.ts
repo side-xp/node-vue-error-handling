@@ -6,6 +6,7 @@ import {
   createPromiseRejectionError,
   createReportedError,
 } from './caughtErrors'
+import { isViteChunkLoadError, trackChunkLoadErrors, tryReloadPage } from './chunkLoadErrors'
 import { isHandled, markAsHandled } from './handledErrors'
 import { callSafely, logError } from './safeCalls'
 import type { CaughtError, ErrorHandling, ErrorHandlingOptions, NavigationError } from './types'
@@ -23,6 +24,8 @@ export interface NavigationBoundaryHandle {
 
 /** What the error boundaries and `useErrorHandling()` get from the error handling installed on the app. */
 export interface ErrorHandlingContext {
+  /** Checks if the given error is a failure to load a chunk (reported by Vite, or detected by the app). */
+  isChunkLoadError(error: unknown): boolean
   /** Checks if the app ignores the given error. */
   isIgnored(caught: CaughtError): boolean
   /** Gives an error handled by an error boundary to `onError()`, unless it was already handled. */
@@ -54,7 +57,15 @@ function logCaughtError(caught: CaughtError): void {
 
 /** Creates the error handling of an app: catches the errors, normalizes them, and gives them to the app. */
 export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHandling {
-  const { router, onError = logCaughtError, onUnhandledError, ignore, throttleMs = DEFAULT_THROTTLE_MS } = options
+  const {
+    router,
+    onError = logCaughtError,
+    onUnhandledError,
+    ignore,
+    throttleMs = DEFAULT_THROTTLE_MS,
+    reloadOnChunkLoadError = true,
+    isChunkLoadError: isAppChunkLoadError,
+  } = options
 
   /** Navigation boundaries currently mounted, in the order they were mounted. */
   const navigationBoundaries: Set<NavigationBoundaryHandle> = new Set()
@@ -77,6 +88,14 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     }
     lastUnhandledTimestamps.set(message, now)
     return false
+  }
+
+  /** Checks if the given error is a failure to load a chunk: reported by Vite, or detected by the app. */
+  function isChunkLoadError(error: unknown): boolean {
+    return (
+      isViteChunkLoadError(error) ||
+      (isAppChunkLoadError !== undefined && callSafely(isAppChunkLoadError, error) === true)
+    )
   }
 
   /** Checks if the app ignores the given error. An `ignore()` that fails doesn't ignore it, so it can't disappear silently. */
@@ -109,13 +128,13 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
       // The error is given to `onError()` instead, which logs it by default (as Vue does with the component errors)
       event.preventDefault()
-      handleError(createPromiseRejectionError(event))
+      handleError(createPromiseRejectionError(event, isChunkLoadError))
     }
 
     // Errors thrown outside of Vue (e.g. in timers, or in listeners added with `addEventListener()`)
     const onWindowError = (event: ErrorEvent): void => {
       event.preventDefault()
-      handleError(createGlobalError(event))
+      handleError(createGlobalError(event, isChunkLoadError))
     }
 
     window.addEventListener('unhandledrejection', onUnhandledRejection)
@@ -133,7 +152,13 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     }
 
     const removeErrorHandler: () => void = router.onError((error, to, from) => {
-      const caught: NavigationError = createNavigationError(error, to, from)
+      // A new deployment may have removed the chunks of the running version: loading the page again gets the new ones
+      if (reloadOnChunkLoadError && isChunkLoadError(error) && tryReloadPage(router.resolve(to).href)) {
+        markAsHandled(error)
+        return
+      }
+
+      const caught: NavigationError = createNavigationError(error, to, from, isChunkLoadError)
       // No component threw it: it can only be displayed by a navigation boundary
       for (const boundary of navigationBoundaries) {
         if (boundary.handleNavigationError(caught)) {
@@ -160,6 +185,7 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
   }
 
   const context: ErrorHandlingContext = {
+    isChunkLoadError,
     isIgnored,
 
     handleBoundaryError(caught: CaughtError): void {
@@ -195,14 +221,14 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
 
       // Errors of the components that no error boundary handled
       app.config.errorHandler = (error, instance, info) => {
-        handleError(createComponentError(error, instance, info))
+        handleError(createComponentError(error, instance, info, isChunkLoadError))
         if (previousErrorHandler) {
           // Like the other callbacks of the app, an error thrown by it is only logged
           callSafely(previousErrorHandler, error, instance, info)
         }
       }
 
-      const removeHandlers: (() => void)[] = [handleWindowErrors(), handleNavigationErrors()]
+      const removeHandlers: (() => void)[] = [trackChunkLoadErrors(), handleWindowErrors(), handleNavigationErrors()]
       app.onUnmount(() => {
         for (const removeHandler of removeHandlers) {
           removeHandler()
@@ -214,7 +240,7 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     },
 
     report(error: unknown): void {
-      handleError(createReportedError(error))
+      handleError(createReportedError(error, null, isChunkLoadError))
     },
   }
 }

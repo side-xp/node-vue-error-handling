@@ -30,6 +30,11 @@ interface CaughtErrorBase {
   error: unknown
   /** A readable message, from any thrown value. */
   message: string
+  /**
+   * Whether a lazy loaded chunk failed to load (e.g. a page or an async component, after a new deployment).
+   * Detected from Vite's `vite:preloadError` event (production builds only), and the `isChunkLoadError()` option.
+   */
+  isChunkLoadError: boolean
 }
 
 /** An error thrown by a component, and caught by Vue. */
@@ -101,6 +106,18 @@ export interface ErrorHandlingOptions {
    * a repeated error doesn't flood the screen. `0` disables it. Defaults to 5 seconds.
    */
   throttleMs?: number
+  /**
+   * Whether the page is loaded again when a navigation fails because a chunk can't be loaded (e.g. after a new
+   * deployment, the chunks of the previous version are no longer served). At most once every 10 seconds. Defaults to
+   * `true`.
+   */
+  reloadOnChunkLoadError?: boolean
+  /**
+   * Returns `true` for the errors that are failures to load a chunk, in addition to the ones reported by Vite (e.g.
+   * with another bundler). Vite's are detected out of the box, from its `vite:preloadError` event (production builds
+   * only).
+   */
+  isChunkLoadError?: (error: unknown) => boolean
 }
 
 /** The error handling of an app, to install as a Vue plugin with `app.use()`. */

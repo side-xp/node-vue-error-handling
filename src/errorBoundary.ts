@@ -159,7 +159,7 @@ export const ErrorBoundary = defineComponent(
         return
       }
       // Stops the propagation to the parent boundaries and the app
-      return tryHandle(createComponentError(thrown, instance, info)) ? false : undefined
+      return tryHandle(createComponentError(thrown, instance, info, context.isChunkLoadError)) ? false : undefined
     })
 
     const handle: ErrorBoundaryHandle = {

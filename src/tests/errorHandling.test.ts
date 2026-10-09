@@ -105,6 +105,7 @@ describe('createErrorHandling()', () => {
         source: 'component',
         error,
         message: 'Setup failed',
+        isChunkLoadError: false,
         phase: 'setup',
         vueInfo: 'setup function',
         instance: expect.anything(),
@@ -374,6 +375,7 @@ describe('createErrorHandling()', () => {
         source: 'promise',
         error: reason,
         message: 'Request failed',
+        isChunkLoadError: false,
         event,
       })
       // The browser doesn't log it a second time
@@ -387,7 +389,13 @@ describe('createErrorHandling()', () => {
 
       const event: ErrorEvent = dispatchWindowError(error)
 
-      expect(onError).toHaveBeenCalledExactlyOnceWith({ source: 'global', error, message: 'Timer failed', event })
+      expect(onError).toHaveBeenCalledExactlyOnceWith({
+        source: 'global',
+        error,
+        message: 'Timer failed',
+        isChunkLoadError: false,
+        event,
+      })
       expect(event.defaultPrevented).toBe(true)
     })
 
@@ -411,7 +419,13 @@ describe('createErrorHandling()', () => {
 
       errorHandling.report(error)
 
-      const caught: CaughtError = { source: 'reported', error, message: 'Save failed', instance: null }
+      const caught: CaughtError = {
+        source: 'reported',
+        error,
+        message: 'Save failed',
+        isChunkLoadError: false,
+        instance: null,
+      }
       expect(onError).toHaveBeenCalledExactlyOnceWith(caught)
       expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(caught)
     })

@@ -51,6 +51,7 @@ describe('useErrorHandling()', () => {
         source: 'reported',
         error,
         message: 'Message failed',
+        isChunkLoadError: false,
         instance: expect.objectContaining({ $options: expect.objectContaining({ name: 'ErrorReporter' }) }),
       })
       expect(onUnhandledError).not.toHaveBeenCalled()

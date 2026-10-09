@@ -8,6 +8,7 @@ Handles the routing and component errors of a Vue app at the closest level possi
 
 - **Vue ≥ 3.5**
 - **Vue Router 4 or 5** (optional): only needed to handle the navigation errors.
+- **Vite** (optional): the chunk loading failures (e.g. after a new deployment) are detected out of the box in the apps built with Vite. With another bundler, give the detection to the `isChunkLoadError` option.
 
 ## Install
 
@@ -128,6 +129,39 @@ Wrap the router view with a boundary to handle the errors of the pages (e.g. in 
 
 > Use a single navigation boundary (e.g. around the root router view, not the nested ones): a navigation that fails aborts the whole navigation. With several, the first one mounted displays the errors.
 
+### Chunk loading failures (new deployments)
+
+When a new version of the app is deployed, the chunks of the previous version are no longer served: the users still running it fail to load the pages they haven't visited yet. When a navigation fails this way, the page is loaded again, which gets the new version:
+
+- At most once every 10 seconds (recorded in `sessionStorage`): if the page still fails to load, the navigation boundary displays the error instead of reloading in a loop. Without storage, the page is never loaded again automatically.
+- Only for the navigation errors, which give the page to load. The other failures (e.g. an async component) are flagged with `isChunkLoadError`, to react in a fallback (e.g. offer to reload the app).
+- Disable it with `reloadOnChunkLoadError: false`.
+
+```vue
+<ErrorBoundary navigation>
+  <RouterView />
+  <template #fallback="{ error, retry }">
+    <template v-if="error.isChunkLoadError">
+      <p>A new version of the app is available.</p>
+      <button @click="reloadApp">Reload</button>
+    </template>
+    <template v-else>
+      <p>This page can't be displayed.</p>
+      <button @click="retry">Retry</button>
+    </template>
+  </template>
+</ErrorBoundary>
+```
+
+The failures are detected from Vite's [`vite:preloadError`](https://vite.dev/guide/build#load-error-handling) event, since the browsers give them different messages. Vite only dispatches it in production builds: while developing, these errors are handled like the others. With another bundler, give the detection to the `isChunkLoadError` option, e.g. with webpack:
+
+```ts
+createErrorHandling({
+  router,
+  isChunkLoadError: (error) => error instanceof Error && error.name === 'ChunkLoadError',
+})
+```
+
 ### Report errors
 
 Some errors never reach Vue: the ones caught by the app on purpose (`try...catch`), or thrown in callbacks that Vue doesn't call (timers, sockets, third-party libraries). Report them to handle them like the others.
@@ -198,6 +232,8 @@ The handled errors are recorded in a `WeakSet`: the error objects are not modifi
 | `onUnhandledError(caught)` | | Receives the errors nothing else handled, after `onError()` (e.g. to display a notification) |
 | `ignore(caught)` | | Returns `true` for the errors to ignore: they're given neither to `onError()` nor to `onUnhandledError()` |
 | `throttleMs` | `5000` | Minimum delay before an error with the same message is given to `onUnhandledError()` again, so a repeated error doesn't flood the screen. `0` disables it |
+| `reloadOnChunkLoadError` | `true` | Whether the page is loaded again when a navigation fails to load a chunk (see [Chunk loading failures](#chunk-loading-failures-new-deployments)) |
+| `isChunkLoadError(error)` | | Returns `true` for the chunk loading failures, in addition to the ones reported by Vite (e.g. with another bundler) |
 
 The callbacks can't break the error handling: an error thrown by one of them is only logged with `console.error()` (handling it could loop). If `ignore()` throws, the error is not ignored.
 
@@ -210,6 +246,7 @@ The callbacks receive a `CaughtError`, the same normalized object whatever the e
 | `error` | The thrown value, as is |
 | `message` | A readable message, from any thrown value. Meant for logs and developers: write the texts displayed to the users yourself (e.g. translated, from the error or its context) |
 | `source` | Where the error was caught. Narrows the type of the error to get the properties of its source |
+| `isChunkLoadError` | Whether a lazy loaded chunk failed to load (e.g. a page or an async component, after a new deployment) |
 
 #### Component errors (`source: 'component'`)
 

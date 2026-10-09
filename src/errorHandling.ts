@@ -7,8 +7,9 @@ import {
   createReportedError,
 } from './caughtErrors'
 import { isViteChunkLoadError, trackChunkLoadErrors, tryReloadPage } from './chunkLoadErrors'
+import { logCaughtError } from './errorLogging'
 import { isHandled, markAsHandled } from './handledErrors'
-import { callSafely, logError } from './safeCalls'
+import { callSafely } from './safeCalls'
 import type { CaughtError, ErrorHandling, ErrorHandlingOptions, NavigationError } from './types'
 
 /** Default minimum delay before an error with the same message is given to `onUnhandledError()` again. */
@@ -48,11 +49,6 @@ export function injectErrorHandling(feature: string): ErrorHandlingContext {
     throw new Error(`${feature} requires the error handling: install it with \`app.use(createErrorHandling())\` first.`)
   }
   return context
-}
-
-/** Logs a caught error to the console, as Vue does when the app has no error handler. */
-function logCaughtError(caught: CaughtError): void {
-  logError(caught.error)
 }
 
 /** Creates the error handling of an app: catches the errors, normalizes them, and gives them to the app. */

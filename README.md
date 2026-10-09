@@ -41,7 +41,7 @@ app.use(router)
 app.mount('#app')
 ```
 
-Every error is given to `onError()`, then to `onUnhandledError()` if nothing else handled it. Without `onError()`, the errors are logged with `console.error()`.
+Every error is given to `onError()`, then to `onUnhandledError()` if nothing else handled it. Without `onError()`, the errors are logged with `console.error()`, with their context: where they were caught, the phase and the component trace of the component errors (Vue doesn't log it anymore once an error handler is set), the target route of the navigation errors...
 
 > An error handler already set on the app (`app.config.errorHandler`) before installing the plugin still receives the errors. The handlers are removed when the app is unmounted.
 

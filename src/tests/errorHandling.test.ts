@@ -343,7 +343,8 @@ describe('createErrorHandling()', () => {
 
       mountWithErrorHandling(Faulty)
 
-      expect(consoleError).toHaveBeenCalledWith(error)
+      // The context of the error is tested with the logging
+      expect(consoleError).toHaveBeenCalledWith(expect.any(String), error)
     })
 
     it('keeps the error handler set before it', () => {

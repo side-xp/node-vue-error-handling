@@ -1,7 +1,7 @@
-/** Logs an error to the console. */
-export function logError(error: unknown): void {
+/** Logs an error to the console, with the given values before it if any (e.g. its context). */
+export function logError(...values: unknown[]): void {
   // biome-ignore lint/suspicious/noConsole: last resort of the errors, when the app doesn't handle them or can't
-  console.error(error)
+  console.error(...values)
 }
 
 /** Calls a callback given by the app. An error thrown by the callback is only logged, since handling it could loop. */

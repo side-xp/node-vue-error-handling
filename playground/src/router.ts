@@ -14,5 +14,10 @@ export const router: Router = createRouter({
       name: 'componentErrors',
       component: () => import('./pages/ComponentErrorsPage.vue'),
     },
+    {
+      path: '/unhandled-errors',
+      name: 'unhandledErrors',
+      component: () => import('./pages/UnhandledErrorsPage.vue'),
+    },
   ],
 })

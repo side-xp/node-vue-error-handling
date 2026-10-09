@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import ErrorLog from './components/ErrorLog.vue'
+import NotificationList from './components/NotificationList.vue'
 </script>
 
 <template>
@@ -9,10 +10,12 @@ import ErrorLog from './components/ErrorLog.vue'
     <nav>
       <RouterLink to="/">Home</RouterLink>
       <RouterLink to="/component-errors">Component errors</RouterLink>
+      <RouterLink to="/unhandled-errors">Unhandled errors</RouterLink>
     </nav>
   </header>
   <main>
     <RouterView />
   </main>
   <ErrorLog />
+  <NotificationList />
 </template>

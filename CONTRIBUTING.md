@@ -25,10 +25,15 @@
 
 ```
 src/
-  index.ts       # package entry, exposes the public API
-  tests/         # Vitest tests
-playground/      # Vue app to try the library in a real app (never published)
-dist/            # build output (gitignored)
+  index.ts           # package entry, exposes the public API
+  types.ts           # public types
+  errorHandling.ts   # the plugin (`createErrorHandling()`)
+  vuePhases.ts       # table of Vue's error types, mapped to phases
+  tests/             # Vitest tests
+playground/          # Vue app to try the library in a real app (never published)
+  src/pages/         # one page per kind of error to trigger
+  src/components/    # faulty components and the "Caught errors" panel
+dist/                # build output (gitignored)
 ```
 
 ## Scripts
@@ -54,7 +59,37 @@ dist/            # build output (gitignored)
 
 `playground/` is a small Vite + Vue + Vue Router app, to try each feature in a real app while developing it. It imports the library by its package name (`@side-xp/vue-error-handling`), aliased to `src/index.ts`, so its code reads like an app using the installed package, and changes to the library are applied with HMR.
 
-Some behaviors only exist in production builds (e.g. Vue's error sources, or Vite's chunk loading errors): try them with `npm run playground:build` then `npm run playground:preview`.
+#### Running it
+
+```sh
+npm run playground
+```
+
+Open the URL printed by Vite (usually `http://localhost:5173`). Each page triggers errors of a given kind (e.g. *Component errors*: a component failing in each phase, failing event handlers). Every error received by the error handling is:
+
+- logged to the browser console,
+- listed in the **Caught errors** panel at the bottom of every page, with its source, message and context (e.g. the phase and the component of a component error, and the `info` given by Vue as is).
+
+#### Production builds
+
+Some behaviors only exist in production builds (e.g. the form of Vue's error types, or Vite's chunk loading errors). Try them with:
+
+```sh
+npm run playground:build
+npm run playground:preview
+```
+
+Then open the URL printed by Vite (usually `http://localhost:4173`). In the **Caught errors** panel, Vue's `info` becomes a link to its error reference (e.g. `https://vuejs.org/error-reference/#runtime-0`), but the phases must be the same as in development.
+
+#### Adding a scenario
+
+When implementing a feature, add a way to trigger it in the playground:
+
+- A new kind of error gets its own page in `playground/src/pages/`, with a route in `playground/src/router.ts` and a link in the navigation of `playground/src/App.vue`.
+- Keep the scenarios explicit: one button (or toggle) per case, with a label that says what fails.
+- Show the result on screen whenever possible (e.g. in the **Caught errors** panel), so a scenario can be checked without the browser's dev tools.
+
+#### Never published
 
 The playground can never be published:
 
@@ -76,8 +111,33 @@ Tests live in `src/tests/` and run in the `jsdom` environment. The **pre-push** 
 `@` is aliased to `./src` in the tests. The library itself only uses relative imports.
 
 ```ts
-import { hello } from '@/index'
+import { createErrorHandling } from '@/errorHandling'
 ```
+
+### Keeping Vue's error types up to date
+
+Vue gives the type of each error it catches to the error hooks (`info`), in a different form in each build:
+
+- **Development builds**: a description (e.g. `'setup function'`), from Vue's `ErrorTypeStrings`.
+- **Production builds**: a link to the [error reference](https://vuejs.org/error-reference/#runtime-errors), ending with the code of the error type (e.g. `'https://vuejs.org/error-reference/#runtime-0'`).
+
+`src/vuePhases.ts` lists every error type (`VUE_ERROR_TYPES`: code, description, and the phase it's mapped to), and reads both forms. These are internal strings of Vue: a Vue release can add, remove or rename one, or change the production form. An unknown error type doesn't break anything (its phase is `other`), but it may be handled the wrong way (e.g. a boundary not replacing content that can't be displayed).
+
+`src/tests/vuePhases.test.ts` detects these changes, against the **installed** Vue version:
+
+- **"match the error types of the installed Vue version"** compares `VUE_ERROR_TYPES` to Vue's `ErrorTypeStrings` (codes and descriptions).
+- **"match the form of the error types in the production build"** checks that the production build of Vue (`@vue/runtime-core/dist/runtime-core.cjs.prod.js`) still builds its `info` as an error reference link. Vitest always runs the development build of Vue, so the production build is checked from its source.
+
+#### When upgrading Vue
+
+Vue is upgraded through the `vue` dev dependency (e.g. a Dependabot PR). Each upgrade must run the tests (the CI does), and if one of the tests above fails:
+
+1. Find what changed in Vue's source, for the new version: the `ErrorCodes` enum and `ErrorTypeStrings` in [`packages/runtime-core/src/errorHandling.ts`](https://github.com/vuejs/core/blob/main/packages/runtime-core/src/errorHandling.ts), and the `LifecycleHooks` enum in [`packages/runtime-core/src/enums.ts`](https://github.com/vuejs/core/blob/main/packages/runtime-core/src/enums.ts) (the lifecycle hooks use their own codes, e.g. `m` for `mounted`).
+2. Update `VUE_ERROR_TYPES`: add, remove or rename the error types, and choose the phase of each new one. Mind the phases that prevent a component from being displayed (`setup`, `render`, `mount`, `asyncComponent`): a boundary replaces its content for these.
+3. If the production form changed, update `ERROR_REFERENCE_URL` and `getVuePhase()` in `src/vuePhases.ts`, and the expected form in the test.
+4. Check the result in the playground, in both builds (see [Production builds](#production-builds)): the phases listed in the **Caught errors** panel must be the same.
+
+> The tests only check the installed version, but the table must also work with the oldest supported Vue version (see `peerDependencies`). If Vue removes an error type that older supported versions still give, keep it in the table, and relax the first test so it only checks that every error type of the installed version is in the table.
 
 ### Building & publishing
 

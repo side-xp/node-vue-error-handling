@@ -47,8 +47,9 @@ Every error is given to `onError()`, then to `onUnhandledError()` if nothing els
 import { createErrorHandling, logCaughtError } from '@side-xp/vue-error-handling'
 
 createErrorHandling({
-  onError: (caught) => {
-    logCaughtError(caught)
+  onError: (caught, info) => {
+    // With `info`, the log also tells which error boundary handled the error
+    logCaughtError(caught, info)
     monitoring.capture(caught.error)
   },
 })
@@ -103,10 +104,23 @@ An error goes up from the component where it happened, and stops at the first bo
 - The other errors leave the content usable: the content stays, and the `default` slot receives the error, to display it next to the content.
 - The errors that don't match its `filter` continue to the parent boundaries, then to `onUnhandledError()`. By default, a boundary only handles the errors that prevent its content from being displayed, and the reported errors.
 
-The errors handled by a boundary are still given to `onError()` (e.g. for monitoring), but not to `onUnhandledError()`. The ignored errors are not handled by the boundaries.
+The errors handled by a boundary are still given to `onError()` (e.g. for monitoring), but not to `onUnhandledError()`. The second argument of `onError()` tells how the error was handled: its `handledBy` is the boundary that handled it (`{ name }`, with the `name` prop of the boundary), or `null` if no boundary handled it. E.g. to report the errors handled by a boundary with a lower severity:
+
+```ts
+createErrorHandling({
+  onError: (caught, { handledBy }) =>
+    monitoring.capture(caught.error, {
+      level: handledBy ? 'warning' : 'error',
+      tags: { boundary: handledBy?.name },
+    }),
+})
+```
+
+The ignored errors are not handled by the boundaries.
 
 | Prop | Default | Description |
 |---|---|---|
+| `name` | | Name of the boundary, given to `onError()` with the errors it handles (e.g. to tag them in a monitoring service) |
 | `navigation` | `false` | Also displays the navigation errors (see [Page boundary and navigation errors](#page-boundary-and-navigation-errors)) |
 | `filter` | `['setup', 'render', 'mount', 'asyncComponent', 'reported']` | The errors to handle: a list of phases (and `'reported'` for the reported errors), or a function that returns `true` for the errors to handle (it receives the `CaughtError`) |
 
@@ -239,7 +253,7 @@ The handled errors are recorded in a `WeakSet`: the error objects are not modifi
 | Option | Default | Description |
 |---|---|---|
 | `router` | | The router of the app, to handle the navigation errors |
-| `onError(caught)` | `logCaughtError()` | Receives every error that is not ignored. The single exit point of the errors (e.g. to plug a monitoring service) |
+| `onError(caught, info)` | `logCaughtError()` | Receives every error that is not ignored, and how it was handled (`info.handledBy`: the error boundary that handled it, or `null`). The single exit point of the errors (e.g. to plug a monitoring service) |
 | `onUnhandledError(caught)` | | Receives the errors nothing else handled, after `onError()` (e.g. to display a notification) |
 | `ignore(caught)` | | Returns `true` for the errors to ignore: they're given neither to `onError()` nor to `onUnhandledError()` |
 | `throttleMs` | `5000` | Minimum delay before an error with the same message is given to `onUnhandledError()` again, so a repeated error doesn't flood the screen. `0` disables it |
@@ -258,7 +272,6 @@ The callbacks receive a `CaughtError`, the same normalized object whatever the e
 | `message` | A readable message, from any thrown value (including the objects that are not errors but have a `message`, e.g. `{ message, code }`). Meant for logs and developers: write the texts displayed to the users yourself (e.g. translated, from the error or its context) |
 | `source` | Where the error was caught. Narrows the type of the error to get the properties of its source |
 | `isChunkLoadError` | Whether a lazy loaded chunk failed to load (e.g. a page or an async component, after a new deployment) |
-
 #### Component errors (`source: 'component'`)
 
 The errors thrown by the components, caught by Vue: setup, render, lifecycle hooks, watchers, event handlers declared in templates (including the promises rejected by async handlers)...

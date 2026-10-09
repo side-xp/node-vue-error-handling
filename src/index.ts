@@ -14,6 +14,8 @@ export type {
   ErrorHandlingOptions,
   ErrorSource,
   GlobalError,
+  HandlingBoundary,
+  HandlingInfo,
   NavigationError,
   PromiseRejectionError,
   ReportedError,

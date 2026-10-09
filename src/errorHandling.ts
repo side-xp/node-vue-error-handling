@@ -10,7 +10,7 @@ import { isViteChunkLoadError, trackChunkLoadErrors, tryReloadPage } from './chu
 import { logCaughtError } from './errorLogging'
 import { isHandled, markAsHandled } from './handledErrors'
 import { callSafely } from './safeCalls'
-import type { CaughtError, ErrorHandling, ErrorHandlingOptions, NavigationError } from './types'
+import type { CaughtError, ErrorHandling, ErrorHandlingOptions, HandlingBoundary, NavigationError } from './types'
 
 /** Default minimum delay before an error with the same message is given to `onUnhandledError()` again. */
 const DEFAULT_THROTTLE_MS = 5_000
@@ -29,8 +29,8 @@ export interface ErrorHandlingContext {
   isChunkLoadError(error: unknown): boolean
   /** Checks if the app ignores the given error. */
   isIgnored(caught: CaughtError): boolean
-  /** Gives an error handled by an error boundary to `onError()`, unless it was already handled. */
-  handleBoundaryError(caught: CaughtError): void
+  /** Gives an error handled by the given error boundary to `onError()`, unless it was already handled. */
+  handleBoundaryError(caught: CaughtError, boundary: HandlingBoundary): void
   /** Gives an error that no error boundary handled to the app, unless it was already handled or it's ignored. */
   handleUnhandledError(caught: CaughtError): void
   /** Registers a navigation boundary, to give it the navigation errors. Returns a function that unregisters it. */
@@ -111,7 +111,7 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
       return
     }
 
-    callSafely(onError, caught)
+    callSafely(onError, caught, { handledBy: null })
     // Also prevents an infinite loop if `onUnhandledError()` itself causes the same error
     if (onUnhandledError && !isThrottled(caught.message)) {
       callSafely(onUnhandledError, caught)
@@ -184,12 +184,12 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     isChunkLoadError,
     isIgnored,
 
-    handleBoundaryError(caught: CaughtError): void {
+    handleBoundaryError(caught: CaughtError, boundary: HandlingBoundary): void {
       if (isHandled(caught.error)) {
         return
       }
       markAsHandled(caught.error)
-      callSafely(onError, caught)
+      callSafely(onError, caught, { handledBy: boundary })
     },
 
     handleUnhandledError: handleError,

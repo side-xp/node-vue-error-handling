@@ -61,6 +61,18 @@ export type VuePhase =
   /** Other errors caught by Vue (e.g. directives, transitions, template refs, scheduler). */
   | 'other'
 
+/** The error boundary that handled an error. */
+export interface HandlingBoundary {
+  /** The `name` prop of the boundary, if any (e.g. to tag the errors in a monitoring service). */
+  name: string | undefined
+}
+
+/** How a caught error was handled, given to `onError()` next to the error. */
+export interface HandlingInfo {
+  /** The error boundary that handled the error, or `null` if no boundary handled it (it's then given to `onUnhandledError()`). */
+  handledBy: HandlingBoundary | null
+}
+
 /** Properties shared by all the caught errors. */
 interface CaughtErrorBase {
   /** The thrown value, as is. */
@@ -129,8 +141,11 @@ export type ErrorSource = CaughtError['source']
 export interface ErrorHandlingOptions {
   /** The router of the app, to handle the navigation errors. */
   router?: RouterLike
-  /** Receives every caught error that is not ignored (e.g. to plug a monitoring service). Defaults to `logCaughtError()`. */
-  onError?: (caught: CaughtError) => void
+  /**
+   * Receives every caught error that is not ignored (e.g. to plug a monitoring service), and how it was handled (e.g.
+   * by an error boundary). Defaults to `logCaughtError()`.
+   */
+  onError?: (caught: CaughtError, info: HandlingInfo) => void
   /**
    * Receives the caught errors that nothing else handled, after `onError()` (e.g. to display a notification).
    * An error with the same message is given again only after `throttleMs`.
@@ -188,6 +203,8 @@ export type ErrorFilter = (VuePhase | 'reported')[] | ((caught: ComponentError |
 
 /** Props of the `ErrorBoundary` component. */
 export interface ErrorBoundaryProps {
+  /** Name of the boundary, given to `onError()` with the errors it handles (e.g. to tag them in a monitoring service). */
+  name?: string
   /**
    * The errors this boundary handles. The others continue to the parent boundaries, then to the app.
    * Defaults to the errors that prevent the content from being displayed (`setup`, `render`, `mount`, `asyncComponent`),

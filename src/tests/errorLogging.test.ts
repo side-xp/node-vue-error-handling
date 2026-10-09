@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, type MockInstance, vi } from 'vitest'
-import { type Component, defineComponent, h, onMounted } from 'vue'
+import { type Component, defineComponent, h, nextTick, onMounted } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { createErrorHandling } from '@/errorHandling'
 import { useErrorHandling } from '@/useErrorHandling'
-import { FailingSetup, type MountOptions, mountInApp, unmountApps } from './helpers'
+import { FailingSetup, type MountOptions, mountInApp, renderBoundary, unmountApps } from './helpers'
 
 /** Spies on `console.error()`, without logging anything. */
 function spyOnConsoleError(): MockInstance<typeof console.error> {
@@ -128,6 +128,22 @@ describe('default logging', () => {
     }
 
     expect(consoleError).toHaveBeenCalledExactlyOnceWith('[vue-error-handling] Navigation error (to: /guarded)', error)
+  })
+
+  it('logs the boundary that handled the error', async () => {
+    const consoleError = spyOnConsoleError()
+    mountInApp(() => renderBoundary({ name: 'sidebar' }, { default: () => h(FailingSetup), fallback: () => null }), {
+      onError: undefined,
+    })
+
+    await nextTick()
+
+    expect(consoleError).toHaveBeenCalledExactlyOnceWith(
+      expect.stringMatching(
+        /^\[vue-error-handling\] Component error \(phase: setup, handled by <ErrorBoundary name="sidebar">\)\n/,
+      ),
+      expect.objectContaining({ message: 'Setup failed' }),
+    )
   })
 
   it('logs the chunk loading failures', () => {

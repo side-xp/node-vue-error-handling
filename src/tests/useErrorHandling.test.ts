@@ -47,13 +47,16 @@ describe('useErrorHandling()', () => {
       await nextTick()
 
       expect(container.textContent).toBe('Fallback: Message failed')
-      expect(onError).toHaveBeenCalledExactlyOnceWith({
-        source: 'reported',
-        error,
-        message: 'Message failed',
-        isChunkLoadError: false,
-        instance: expect.objectContaining({ $options: expect.objectContaining({ name: 'ErrorReporter' }) }),
-      })
+      expect(onError).toHaveBeenCalledExactlyOnceWith(
+        {
+          source: 'reported',
+          error,
+          message: 'Message failed',
+          isChunkLoadError: false,
+          instance: expect.objectContaining({ $options: expect.objectContaining({ name: 'ErrorReporter' }) }),
+        },
+        { handledBy: { name: undefined } },
+      )
       expect(onUnhandledError).not.toHaveBeenCalled()
     })
 

@@ -149,7 +149,7 @@ export const ErrorBoundary = defineComponent(
       if (!canHandle(caught)) {
         return false
       }
-      context.handleBoundaryError(caught)
+      context.handleBoundaryError(caught, { name: props.name })
       error.value = caught
       return true
     }
@@ -211,6 +211,7 @@ export const ErrorBoundary = defineComponent(
   {
     name: 'ErrorBoundary',
     props: {
+      name: { type: String, required: false },
       filter: { type: [Array, Function] as PropType<ErrorFilter>, required: false },
       navigation: { type: Boolean, default: false },
     },

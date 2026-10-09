@@ -25,7 +25,9 @@ describe('ErrorBoundary', () => {
 
       expect(container.textContent).toBe('Fallback: Setup failed')
       // Still given to `onError()`, but handled by the boundary
-      expect(onError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ phase: 'setup' }))
+      expect(onError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ phase: 'setup' }), {
+        handledBy: { name: undefined },
+      })
       expect(onUnhandledError).not.toHaveBeenCalled()
     })
 
@@ -217,6 +219,55 @@ describe('ErrorBoundary', () => {
 
       expect(container.textContent).toBe('')
       expect(onError).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('handling info', () => {
+    it('gives the boundary that handled the error to `onError()`', async () => {
+      const onError = vi.fn()
+      mountInApp(
+        () =>
+          renderBoundary(
+            { name: 'outer' },
+            {
+              default: () =>
+                renderBoundary({ name: 'inner', filter: ['eventHandler'] }, { default: () => h(FailingSetup) }),
+              fallback: () => 'Outer fallback',
+            },
+          ),
+        { onError },
+      )
+
+      await nextTick()
+
+      expect(onError).toHaveBeenCalledExactlyOnceWith(expect.anything(), { handledBy: { name: 'outer' } })
+    })
+
+    it('gives a boundary without name', async () => {
+      const onError = vi.fn()
+      mountInApp(() => renderBoundary({}, { default: () => h(FailingSetup), fallback: () => 'Fallback' }), { onError })
+
+      await nextTick()
+
+      expect(onError).toHaveBeenCalledExactlyOnceWith(expect.anything(), { handledBy: { name: undefined } })
+    })
+
+    it('gives no boundary for the errors no boundary handled', () => {
+      const onError = vi.fn()
+      mountInApp(() => renderBoundary({ name: 'without fallback' }, { default: () => h(FailingSetup) }), { onError })
+
+      expect(onError).toHaveBeenCalledExactlyOnceWith(expect.anything(), { handledBy: null })
+    })
+
+    it("doesn't modify the caught error", async () => {
+      const onError = vi.fn()
+      mountInApp(() => renderBoundary({ name: 'named' }, { default: () => h(FailingSetup), fallback: () => null }), {
+        onError,
+      })
+
+      await nextTick()
+
+      expect(onError.mock.calls[0]?.[0]).not.toHaveProperty('handledBy')
     })
   })
 

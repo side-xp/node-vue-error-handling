@@ -95,7 +95,10 @@ describe('chunk loading failures', () => {
 
       await navigateToLazyPage(router)
 
-      expect(onError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ isChunkLoadError: true }))
+      expect(onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ isChunkLoadError: true }),
+        expect.anything(),
+      )
     })
 
     it('flags the errors detected by the app, in addition to the ones reported by Vite', async () => {
@@ -125,7 +128,10 @@ describe('chunk loading failures', () => {
 
       errorHandling.report(createOtherBundlerError())
 
-      expect(onError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ isChunkLoadError: false }))
+      expect(onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ isChunkLoadError: false }),
+        expect.anything(),
+      )
       expect(consoleError).toHaveBeenCalledWith(detectionFailure)
     })
 

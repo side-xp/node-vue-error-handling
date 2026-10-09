@@ -80,6 +80,7 @@ describe('navigation errors', () => {
         to: expect.objectContaining({ fullPath: '/guard-fails' }),
         from: expect.objectContaining({ fullPath: '/' }),
       }),
+      { handledBy: { name: undefined } },
     )
     expect(onUnhandledError).not.toHaveBeenCalled()
   })

@@ -245,7 +245,9 @@ describe('createErrorHandling()', () => {
       throwError('Ignored')
       throwError('Not ignored')
 
-      expect(onError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: 'Not ignored' }))
+      expect(onError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: 'Not ignored' }), {
+        handledBy: null,
+      })
       expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: 'Not ignored' }))
     })
   })
@@ -391,13 +393,16 @@ describe('createErrorHandling()', () => {
 
       const event: PromiseRejectionEvent = dispatchUnhandledRejection(reason)
 
-      expect(onError).toHaveBeenCalledExactlyOnceWith({
-        source: 'promise',
-        error: reason,
-        message: 'Request failed',
-        isChunkLoadError: false,
-        event,
-      })
+      expect(onError).toHaveBeenCalledExactlyOnceWith(
+        {
+          source: 'promise',
+          error: reason,
+          message: 'Request failed',
+          isChunkLoadError: false,
+          event,
+        },
+        { handledBy: null },
+      )
       // The browser doesn't log it a second time
       expect(event.defaultPrevented).toBe(true)
     })
@@ -409,13 +414,16 @@ describe('createErrorHandling()', () => {
 
       const event: ErrorEvent = dispatchWindowError(error)
 
-      expect(onError).toHaveBeenCalledExactlyOnceWith({
-        source: 'global',
-        error,
-        message: 'Timer failed',
-        isChunkLoadError: false,
-        event,
-      })
+      expect(onError).toHaveBeenCalledExactlyOnceWith(
+        {
+          source: 'global',
+          error,
+          message: 'Timer failed',
+          isChunkLoadError: false,
+          event,
+        },
+        { handledBy: null },
+      )
       expect(event.defaultPrevented).toBe(true)
     })
 
@@ -427,6 +435,7 @@ describe('createErrorHandling()', () => {
 
       expect(onError).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ error: null, message: 'Script error.' }),
+        { handledBy: null },
       )
     })
 
@@ -446,7 +455,7 @@ describe('createErrorHandling()', () => {
         isChunkLoadError: false,
         instance: null,
       }
-      expect(onError).toHaveBeenCalledExactlyOnceWith(caught)
+      expect(onError).toHaveBeenCalledExactlyOnceWith(caught, { handledBy: null })
       expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(caught)
     })
   })

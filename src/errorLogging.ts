@@ -1,6 +1,6 @@
 import type { ComponentPublicInstance } from 'vue'
 import { logError } from './safeCalls'
-import type { CaughtError } from './types'
+import type { CaughtError, HandlingInfo } from './types'
 
 /** Prefix of the logs, to tell them from the other logs of the app. */
 const LOG_PREFIX = '[vue-error-handling]'
@@ -40,12 +40,17 @@ function describeCaughtError(caught: CaughtError): { description: string; detail
 
 /**
  * Logs a caught error to the console, with its context: Vue doesn't log its component trace anymore once an error
- * handler is set. The error is logged as is, so the console keeps its stack trace.
+ * handler is set. The error is logged as is, so the console keeps its stack trace. With the info given to `onError()`,
+ * it also logs the error boundary that handled the error, if any.
  */
-export function logCaughtError(caught: CaughtError): void {
+export function logCaughtError(caught: CaughtError, info?: HandlingInfo): void {
   const { description, details } = describeCaughtError(caught)
   if (caught.isChunkLoadError) {
     details.push('chunk loading failure')
+  }
+  if (info?.handledBy) {
+    const { name } = info.handledBy
+    details.push(name === undefined ? 'handled by <ErrorBoundary>' : `handled by <ErrorBoundary name="${name}">`)
   }
 
   const header: string = details.length > 0 ? `${description} (${details.join(', ')})` : description

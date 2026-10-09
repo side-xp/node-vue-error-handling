@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   type Component,
   defineComponent,
@@ -9,6 +9,7 @@ import {
   type Ref,
   ref,
   Suspense,
+  Teleport,
   Transition,
   type VNode,
   type VNodeChild,
@@ -357,6 +358,88 @@ describe('built-in components', () => {
         ),
       )
       expect(container.textContent).toBe('Home')
+    })
+  })
+
+  describe('Teleport', () => {
+    /** Target of the teleports of the current test, outside of the container of the app. */
+    let target: HTMLElement
+
+    beforeEach(() => {
+      target = document.createElement('div')
+      document.body.append(target)
+    })
+
+    afterEach(() => {
+      target.remove()
+    })
+
+    it('replaces the teleport with the fallback when a teleported component fails', async () => {
+      const shouldFail: Ref<boolean> = ref(false)
+      const FailingRender = defineComponent({
+        name: 'FailingRender',
+        render() {
+          if (shouldFail.value) {
+            throw new Error('Render failed')
+          }
+          return h('p', 'Teleported')
+        },
+      })
+      const fallback = createFallback()
+      const { container } = mountInApp(() =>
+        renderBoundary({}, { default: () => h(Teleport, { to: target }, h(FailingRender)), fallback: fallback.slot }),
+      )
+      expect(target.textContent).toBe('Teleported')
+
+      shouldFail.value = true
+      await nextTick()
+
+      // The error follows the components, not the DOM: the boundary handles it, and the teleported content is removed
+      expect(container.textContent).toBe('Fallback: Render failed')
+      expect(target.textContent).toBe('')
+
+      shouldFail.value = false
+      fallback.actions.at(-1)?.retry()
+      await nextTick()
+      expect(target.textContent).toBe('Teleported')
+    })
+
+    it('handles the errors of the elements teleported directly from it', async () => {
+      const { container } = mountInApp(() =>
+        renderBoundary(
+          { filter: ['eventHandler'] },
+          {
+            default: ({ error }) => [
+              h(Teleport, { to: target }, [
+                h('button', {
+                  onClick: () => {
+                    throw new Error('Click failed')
+                  },
+                }),
+              ]),
+              error ? h('p', error.message) : null,
+            ],
+          },
+        ),
+      )
+
+      target.querySelector('button')?.click()
+      await nextTick()
+
+      expect(container.querySelector('p')?.textContent).toBe('Click failed')
+    })
+
+    it('displays the fallback of a teleported boundary in the target', async () => {
+      const { container } = mountInApp(() =>
+        h(Teleport, { to: target }, [
+          renderBoundary({}, { default: () => h(FailingSetup), fallback: () => 'Teleported fallback' }),
+        ]),
+      )
+
+      await nextTick()
+
+      expect(target.textContent).toBe('Teleported fallback')
+      expect(container.textContent).toBe('')
     })
   })
 })

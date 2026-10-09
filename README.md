@@ -179,6 +179,8 @@ Both slots receive the `error` (`null` in the `default` slot when there's none),
 </ErrorBoundary>
 ```
 
+**`<Teleport>`**: the errors go up the components, not the DOM. A boundary handles the errors of the content it teleports elsewhere (e.g. a modal in `<body>`), and its fallback replaces the teleport (the teleported content is removed from its target). A boundary placed inside a `<Teleport>` displays its fallback in the target.
+
 ### Page boundary and navigation errors
 
 Wrap the router view with a boundary to handle the errors of the pages (e.g. in `App.vue`). With the `navigation` prop, it also displays the navigation errors (a navigation guard that throws, a page that fails to load), which no component threw:

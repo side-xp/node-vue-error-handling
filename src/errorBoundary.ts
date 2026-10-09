@@ -16,6 +16,7 @@ import {
   type SlotsType,
   shallowRef,
   type VNodeChild,
+  watch,
 } from 'vue'
 import { createComponentError } from './caughtErrors'
 import { type ErrorHandlingContext, injectErrorHandling, type NavigationBoundaryHandle } from './errorHandling'
@@ -170,16 +171,35 @@ export const ErrorBoundary = defineComponent(
       },
     }
 
-    if (props.navigation) {
-      const navigationHandle: NavigationBoundaryHandle = {
-        handleNavigationError: (caught: NavigationError): boolean => tryHandle(caught),
+    const navigationHandle: NavigationBoundaryHandle = {
+      handleNavigationError: (caught: NavigationError): boolean => tryHandle(caught),
 
-        clearAfterNavigation(): void {
-          error.value = null
-        },
-      }
-      onUnmounted(context.registerNavigationBoundary(navigationHandle))
+      clearAfterNavigation(): void {
+        error.value = null
+      },
     }
+
+    /** Unregisters this boundary from the navigation boundaries, while it's one. */
+    let unregisterNavigation: (() => void) | null = null
+
+    // Registered at setup (the first one mounted displays the navigation errors), then whenever the prop changes
+    watch(
+      () => props.navigation,
+      (isNavigation) => {
+        if (isNavigation && !unregisterNavigation) {
+          unregisterNavigation = context.registerNavigationBoundary(navigationHandle)
+        } else if (!isNavigation && unregisterNavigation) {
+          unregisterNavigation()
+          unregisterNavigation = null
+          // It doesn't display the navigation errors anymore
+          if (error.value?.source === 'navigation') {
+            error.value = null
+          }
+        }
+      },
+      { immediate: true },
+    )
+    onUnmounted(() => unregisterNavigation?.())
 
     const actions: ErrorBoundaryActions = {
       retry(): void {

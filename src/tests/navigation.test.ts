@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { type Component, defineComponent, h, nextTick, type VNodeChild } from 'vue'
+import { type Component, defineComponent, h, nextTick, type Ref, ref, type VNodeChild } from 'vue'
 import { createMemoryHistory, createRouter, type Router, RouterView } from 'vue-router'
 import type { ErrorBoundarySlots } from '@/types'
 import { createFallback, FailingSetup, mountInApp, renderBoundary, unmountApps } from './helpers'
@@ -157,6 +157,63 @@ describe('navigation errors', () => {
     window.dispatchEvent(new PromiseRejectionEvent('unhandledrejection', { promise, reason: navigationError }))
 
     expect(onError).toHaveBeenCalledOnce()
+  })
+
+  describe('navigation prop', () => {
+    /** Renders the router view in a boundary whose `navigation` prop is the given ref. */
+    function renderToggledRouterView(isNavigation: Ref<boolean>): () => VNodeChild {
+      return () =>
+        renderBoundary(
+          { navigation: isNavigation.value },
+          { default: () => h(RouterView), fallback: ({ error }) => `Fallback: ${error.message}` },
+        )
+    }
+
+    it('makes the boundary display the navigation errors when enabled after setup', async () => {
+      const router: Router = await createTestRouter()
+      const onUnhandledError = vi.fn()
+      const isNavigation: Ref<boolean> = ref(false)
+      const { container } = mountInApp(renderToggledRouterView(isNavigation), { router, onUnhandledError })
+
+      isNavigation.value = true
+      await nextTick()
+      await navigate(router, '/guard-fails')
+
+      expect(container.textContent).toBe('Fallback: Guard failed')
+      expect(onUnhandledError).not.toHaveBeenCalled()
+    })
+
+    it('gives the navigation errors to the app when disabled after setup, and clears the displayed one', async () => {
+      const router: Router = await createTestRouter()
+      const onUnhandledError = vi.fn()
+      const isNavigation: Ref<boolean> = ref(true)
+      const { container } = mountInApp(renderToggledRouterView(isNavigation), { router, onUnhandledError })
+
+      await navigate(router, '/guard-fails')
+      expect(container.textContent).toBe('Fallback: Guard failed')
+
+      isNavigation.value = false
+      await nextTick()
+      expect(container.textContent).toBe('Home')
+
+      await navigate(router, '/guard-fails')
+      expect(container.textContent).toBe('Home')
+      expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: 'Guard failed' }))
+    })
+
+    it('keeps the errors of the page when disabled', async () => {
+      const router: Router = await createTestRouter()
+      const isNavigation: Ref<boolean> = ref(true)
+      const { container } = mountInApp(renderToggledRouterView(isNavigation), { router })
+
+      await navigate(router, '/setup-fails')
+      expect(container.textContent).toBe('Fallback: Setup failed')
+
+      isNavigation.value = false
+      await nextTick()
+
+      expect(container.textContent).toBe('Fallback: Setup failed')
+    })
   })
 
   describe('retry()', () => {

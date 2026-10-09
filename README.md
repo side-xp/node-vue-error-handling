@@ -121,7 +121,7 @@ The ignored errors are not handled by the boundaries.
 | Prop | Default | Description |
 |---|---|---|
 | `name` | | Name of the boundary, given to `onError()` with the errors it handles (e.g. to tag them in a monitoring service) |
-| `navigation` | `false` | Also displays the navigation errors (see [Page boundary and navigation errors](#page-boundary-and-navigation-errors)) |
+| `navigation` | `false` | Also displays the navigation errors (see [Page boundary and navigation errors](#page-boundary-and-navigation-errors)). Can be changed at any time: once disabled, the boundary clears the navigation error it displays |
 | `filter` | `['setup', 'render', 'mount', 'asyncComponent', 'reported']` | The errors to handle: a list of phases (and `'reported'` for the reported errors), or a function that returns `true` for the errors to handle (it receives the `CaughtError`) |
 
 Both slots receive the `error` (`null` in the `default` slot when there's none), and the actions:

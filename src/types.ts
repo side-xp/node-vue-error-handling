@@ -215,6 +215,7 @@ export interface ErrorBoundaryProps {
    * Makes this boundary display the navigation errors (e.g. around the router view): a navigation guard that threw,
    * or a page that failed to load. Its error is cleared after each successful navigation.
    * Use a single navigation boundary: with several, the first one mounted displays the errors.
+   * Can be changed at any time: once disabled, the boundary clears the navigation error it displays.
    */
   navigation?: boolean
 }

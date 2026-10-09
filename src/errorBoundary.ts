@@ -4,9 +4,12 @@ import {
   defineComponent,
   getCurrentInstance,
   h,
+  type InjectionKey,
   inject,
   onErrorCaptured,
+  onUnmounted,
   type PropType,
+  provide,
   type Ref,
   ref,
   type ShallowRef,
@@ -15,72 +18,92 @@ import {
   type VNodeChild,
 } from 'vue'
 import { createComponentError } from './caughtErrors'
-import { ERROR_HANDLING_KEY, type ErrorHandlingContext } from './errorHandling'
+import { type ErrorHandlingContext, injectErrorHandling } from './errorHandling'
 import { callSafely } from './safeCalls'
 import type {
-  ComponentError,
+  BoundaryError,
   ErrorBoundaryActions,
   ErrorBoundaryProps,
   ErrorBoundarySlots,
   ErrorFilter,
+  ReportedError,
   VuePhase,
 } from './types'
+
+/** What the content of an error boundary gets from it, to report errors to it. */
+export interface ErrorBoundaryHandle {
+  /** The closest parent boundary, if any. */
+  parent: ErrorBoundaryHandle | null
+  /** Handles an error reported by the content, if the boundary can. Returns `true` if it handled it. */
+  handleReportedError(caught: ReportedError): boolean
+}
+
+/** Injection key of the closest error boundary, provided to its content only (not to its fallback). */
+export const ERROR_BOUNDARY_KEY: InjectionKey<ErrorBoundaryHandle | null> = Symbol('errorBoundary')
 
 /** Phases of the errors that prevent the content from being displayed: the content is replaced by the fallback. */
 const BREAKING_PHASES: ReadonlySet<VuePhase> = new Set(['setup', 'render', 'mount', 'asyncComponent'])
 
 /** Default errors handled by an error boundary: the ones that prevent its content from being displayed. */
-const DEFAULT_FILTER: ErrorFilter = [...BREAKING_PHASES]
+const DEFAULT_FILTER: ErrorFilter = [...BREAKING_PHASES, 'reported']
 
-/** Checks if an error prevents the content from being displayed. */
-function isBreakingError(caught: ComponentError): boolean {
-  return BREAKING_PHASES.has(caught.phase)
+/**
+ * Checks if an error prevents the content from being displayed.
+ * A reported error does: the component reports it because it can't work properly anymore.
+ */
+function isBreakingError(caught: BoundaryError): boolean {
+  return caught.source === 'reported' || BREAKING_PHASES.has(caught.phase)
 }
 
 /** Checks if an error matches the given filter. A filter function that fails doesn't match, so the error continues. */
-function matchesFilter(caught: ComponentError, filter: ErrorFilter): boolean {
-  return typeof filter === 'function' ? callSafely(filter, caught) === true : filter.includes(caught.phase)
-}
-
-/** Gets the error handling installed on the app. */
-function injectErrorHandling(): ErrorHandlingContext {
-  const context: ErrorHandlingContext | undefined = inject(ERROR_HANDLING_KEY, undefined)
-  if (!context) {
-    throw new Error(
-      'ErrorBoundary requires the error handling: install it with `app.use(createErrorHandling())` first.',
-    )
+function matchesFilter(caught: BoundaryError, filter: ErrorFilter): boolean {
+  if (typeof filter === 'function') {
+    return callSafely(filter, caught) === true
   }
-  return context
+  return filter.includes(caught.source === 'reported' ? 'reported' : caught.phase)
 }
 
 /**
- * Renders the content of an error boundary.
+ * Renders the content of an error boundary, and provides the boundary to it.
  * Vue gives the errors of plain elements and template expressions to the component that renders them, and starts
  * looking for `onErrorCaptured()` hooks from its parent: rendering the content in this child component lets the
  * boundary capture them too.
  */
 const ErrorBoundaryContent = defineComponent(
-  (_props, { slots }) =>
-    () =>
-      slots.default?.(),
-  { name: 'ErrorBoundaryContent' },
+  (props: { boundary: ErrorBoundaryHandle }, { slots }) => {
+    provide(ERROR_BOUNDARY_KEY, props.boundary)
+    return () => slots.default?.()
+  },
+  {
+    name: 'ErrorBoundaryContent',
+    props: {
+      boundary: { type: Object as PropType<ErrorBoundaryHandle>, required: true },
+    },
+  },
 )
 
 /**
  * Handles the errors of its content at the closest level possible:
- * - The errors that prevent the content from being displayed replace it with the `fallback` slot.
+ * - The errors that prevent the content from being displayed (and the reported errors) replace it with the
+ *   `fallback` slot.
  * - The other handled errors are given to the `default` slot, to display them next to the content.
  * - The errors it doesn't handle continue to the parent boundaries, then to the app.
  */
 export const ErrorBoundary = defineComponent(
   (props: ErrorBoundaryProps, { slots }) => {
-    const context: ErrorHandlingContext = injectErrorHandling()
+    const context: ErrorHandlingContext = injectErrorHandling('ErrorBoundary')
 
     /** The error handled by this boundary, if any. */
-    const error: ShallowRef<ComponentError | null> = shallowRef(null)
+    const error: ShallowRef<BoundaryError | null> = shallowRef(null)
 
     /** Key of the content, changed to display it again from scratch. */
     const contentKey: Ref<number> = ref(0)
+
+    /** Whether this boundary is unmounted: it can't display the errors reported afterwards (e.g. by a timer). */
+    let isUnmounted = false
+    onUnmounted(() => {
+      isUnmounted = true
+    })
 
     /** This boundary. */
     const self: ComponentInternalInstance | null = getCurrentInstance()
@@ -100,7 +123,7 @@ export const ErrorBoundary = defineComponent(
     }
 
     /** Checks if this boundary handles the given error, and can display it. */
-    function canHandle(caught: ComponentError): boolean {
+    function canHandle(caught: BoundaryError): boolean {
       if (!matchesFilter(caught, props.filter ?? DEFAULT_FILTER)) {
         return false
       }
@@ -112,21 +135,31 @@ export const ErrorBoundary = defineComponent(
       return !context.isIgnored(caught)
     }
 
+    /** Handles the given error, if this boundary can. Returns `true` if it handled it. */
+    function tryHandle(caught: BoundaryError): boolean {
+      if (!canHandle(caught)) {
+        return false
+      }
+      context.handleBoundaryError(caught)
+      error.value = caught
+      return true
+    }
+
     onErrorCaptured((thrown, instance, info) => {
       if (!isFromContent(instance)) {
         return
       }
-
-      const caught: ComponentError = createComponentError(thrown, instance, info)
-      if (!canHandle(caught)) {
-        return
-      }
-
-      context.handleBoundaryError(caught)
-      error.value = caught
       // Stops the propagation to the parent boundaries and the app
-      return false
+      return tryHandle(createComponentError(thrown, instance, info)) ? false : undefined
     })
+
+    const handle: ErrorBoundaryHandle = {
+      parent: inject(ERROR_BOUNDARY_KEY, null),
+
+      handleReportedError(caught: ReportedError): boolean {
+        return !isUnmounted && tryHandle(caught)
+      },
+    }
 
     const actions: ErrorBoundaryActions = {
       retry(): void {
@@ -140,11 +173,11 @@ export const ErrorBoundary = defineComponent(
     }
 
     return (): VNodeChild => {
-      const currentError: ComponentError | null = error.value
+      const currentError: BoundaryError | null = error.value
       if (currentError && isBreakingError(currentError) && slots.fallback) {
         return slots.fallback({ ...actions, error: currentError })
       }
-      return h(ErrorBoundaryContent, { key: contentKey.value }, () =>
+      return h(ErrorBoundaryContent, { key: contentKey.value, boundary: handle }, () =>
         slots.default?.({ ...actions, error: currentError }),
       )
     }

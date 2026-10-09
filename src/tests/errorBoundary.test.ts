@@ -1,82 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  type App,
-  type Component,
-  createApp,
-  defineAsyncComponent,
-  defineComponent,
-  h,
-  nextTick,
-  type VNodeChild,
-} from 'vue'
+import { type App, type Component, createApp, defineAsyncComponent, defineComponent, h, nextTick } from 'vue'
 import { ErrorBoundary } from '@/errorBoundary'
-import { createErrorHandling } from '@/errorHandling'
 import { markAsHandled } from '@/handledErrors'
-import type { ErrorBoundaryActions, ErrorBoundaryProps, ErrorBoundarySlots, ErrorHandlingOptions } from '@/types'
-
-/** Apps mounted by the current test, unmounted after it. */
-const mountedApps: App[] = []
-
-/** A component that fails in its setup. */
-const FailingSetup = defineComponent({
-  name: 'FailingSetup',
-  setup() {
-    throw new Error('Setup failed')
-  },
-})
-
-/** A button that fails when clicked. */
-const FailingButton = defineComponent({
-  name: 'FailingButton',
-  setup() {
-    return () =>
-      h('button', {
-        onClick: () => {
-          throw new Error('Click failed')
-        },
-      })
-  },
-})
-
-/** Mounts the given render function in an app with the error handling installed. */
-function mountInApp(render: () => VNodeChild, options: ErrorHandlingOptions = {}): HTMLElement {
-  const container: HTMLElement = document.createElement('div')
-  const app: App = createApp(defineComponent({ setup: () => render }))
-  // Vue warns about the components that can't render after an error
-  app.config.warnHandler = () => {}
-  app.use(createErrorHandling({ onError: () => {}, ...options }))
-  app.mount(container)
-  mountedApps.push(app)
-  return container
-}
-
-/**
- * Slots of an error boundary, as given to `h()`.
- * A mapped type, since `h()` doesn't accept an interface (it has no index signature).
- */
-type BoundarySlots = { [Name in keyof ErrorBoundarySlots]: ErrorBoundarySlots[Name] }
-
-/** Renders an error boundary with the given props and slots. */
-function renderBoundary(props: ErrorBoundaryProps, slots: BoundarySlots): VNodeChild {
-  return h(ErrorBoundary, props, slots)
-}
-
-/** A fallback slot that displays the error message, and keeps the actions it receives. */
-function createFallback(): { slot: Required<ErrorBoundarySlots>['fallback']; actions: ErrorBoundaryActions[] } {
-  const actions: ErrorBoundaryActions[] = []
-  return {
-    actions,
-    slot: ({ error, ...slotActions }) => {
-      actions.push(slotActions)
-      return h('p', { class: 'fallback' }, `Fallback: ${error.message}`)
-    },
-  }
-}
+import type { ErrorBoundaryActions } from '@/types'
+import { createFallback, FailingButton, FailingSetup, mountInApp, renderBoundary, unmountApps } from './helpers'
 
 afterEach(() => {
-  for (const app of mountedApps.splice(0)) {
-    app.unmount()
-  }
+  unmountApps()
   vi.restoreAllMocks()
 })
 
@@ -85,7 +15,7 @@ describe('ErrorBoundary', () => {
     it('replaces the content with the fallback', async () => {
       const onError = vi.fn()
       const onUnhandledError = vi.fn()
-      const container: HTMLElement = mountInApp(
+      const { container } = mountInApp(
         () =>
           renderBoundary({}, { default: () => h(FailingSetup), fallback: ({ error }) => `Fallback: ${error.message}` }),
         { onError, onUnhandledError },
@@ -113,7 +43,7 @@ describe('ErrorBoundary', () => {
         .mockResolvedValueOnce(defineComponent({ render: () => 'Loaded' }))
       const AsyncComponent = defineAsyncComponent(loader)
       const fallback = createFallback()
-      const container: HTMLElement = mountInApp(() =>
+      const { container } = mountInApp(() =>
         renderBoundary({}, { default: () => h(AsyncComponent), fallback: fallback.slot }),
       )
 
@@ -128,7 +58,7 @@ describe('ErrorBoundary', () => {
   describe('other errors', () => {
     it("aren't handled by default: the content stays, and they continue to the app", () => {
       const onUnhandledError = vi.fn()
-      const container: HTMLElement = mountInApp(
+      const { container } = mountInApp(
         () => renderBoundary({}, { default: () => h(FailingButton), fallback: () => 'Fallback' }),
         { onUnhandledError },
       )
@@ -141,7 +71,7 @@ describe('ErrorBoundary', () => {
 
     it('are given to the default slot when they match the filter, next to the content', async () => {
       const onUnhandledError = vi.fn()
-      const container: HTMLElement = mountInApp(
+      const { container } = mountInApp(
         () =>
           renderBoundary(
             { filter: ['eventHandler'] },
@@ -162,7 +92,7 @@ describe('ErrorBoundary', () => {
       const setup = vi.fn(() => () => h('span', 'Content'))
       const Content = defineComponent({ setup })
       let actions: ErrorBoundaryActions | undefined
-      const container: HTMLElement = mountInApp(() =>
+      const { container } = mountInApp(() =>
         renderBoundary(
           { filter: ['eventHandler'] },
           {
@@ -186,7 +116,7 @@ describe('ErrorBoundary', () => {
 
   describe('filter', () => {
     it('accepts a function', async () => {
-      const container: HTMLElement = mountInApp(() =>
+      const { container } = mountInApp(() =>
         renderBoundary(
           { filter: (caught) => caught.message === 'Setup failed' },
           { default: () => h(FailingSetup), fallback: () => 'Fallback' },
@@ -222,7 +152,7 @@ describe('ErrorBoundary', () => {
 
   describe('propagation', () => {
     it('gives the errors it does not handle to the parent boundaries', async () => {
-      const container: HTMLElement = mountInApp(() =>
+      const { container } = mountInApp(() =>
         renderBoundary(
           {},
           {
@@ -238,7 +168,7 @@ describe('ErrorBoundary', () => {
     })
 
     it('gives the errors of its fallback to the parent boundaries', async () => {
-      const container: HTMLElement = mountInApp(() =>
+      const { container } = mountInApp(() =>
         renderBoundary(
           {},
           {
@@ -254,7 +184,7 @@ describe('ErrorBoundary', () => {
     })
 
     it('handles the errors of the elements placed directly in it', async () => {
-      const container: HTMLElement = mountInApp(() =>
+      const { container } = mountInApp(() =>
         renderBoundary(
           { filter: ['eventHandler'] },
           {
@@ -278,7 +208,7 @@ describe('ErrorBoundary', () => {
 
     it("doesn't handle the ignored errors", async () => {
       const onError = vi.fn()
-      const container: HTMLElement = mountInApp(
+      const { container } = mountInApp(
         () => renderBoundary({}, { default: () => h(FailingSetup), fallback: () => 'Fallback' }),
         { onError, ignore: () => true },
       )
@@ -302,9 +232,7 @@ describe('ErrorBoundary', () => {
         },
       })
       const fallback = createFallback()
-      const container: HTMLElement = mountInApp(() =>
-        renderBoundary({}, { default: () => h(Flaky), fallback: fallback.slot }),
-      )
+      const { container } = mountInApp(() => renderBoundary({}, { default: () => h(Flaky), fallback: fallback.slot }))
       await nextTick()
 
       expect(container.textContent).toBe('Fallback: Setup failed')
@@ -325,7 +253,7 @@ describe('ErrorBoundary', () => {
       })
       const Failing = defineComponent({ setup })
       const fallback = createFallback()
-      const container: HTMLElement = mountInApp(
+      const { container } = mountInApp(
         () => renderBoundary({}, { default: () => h(Failing), fallback: fallback.slot }),
         { onError },
       )
@@ -353,7 +281,7 @@ describe('ErrorBoundary', () => {
           throw error
         },
       })
-      const container: HTMLElement = mountInApp(
+      const { container } = mountInApp(
         () => renderBoundary({}, { default: () => h(Failing), fallback: ({ error }) => error.message }),
         { onError },
       )
@@ -370,7 +298,7 @@ describe('ErrorBoundary', () => {
       app.config.warnHandler = () => {}
       app.config.errorHandler = errorHandler
       app.mount(document.createElement('div'))
-      mountedApps.push(app)
+      app.unmount()
 
       expect(errorHandler).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ message: expect.stringContaining('requires the error handling') }),

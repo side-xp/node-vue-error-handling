@@ -411,7 +411,7 @@ describe('createErrorHandling()', () => {
 
       errorHandling.report(error)
 
-      const caught: CaughtError = { source: 'reported', error, message: 'Save failed' }
+      const caught: CaughtError = { source: 'reported', error, message: 'Save failed', instance: null }
       expect(onError).toHaveBeenCalledExactlyOnceWith(caught)
       expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(caught)
     })

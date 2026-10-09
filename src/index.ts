@@ -2,6 +2,7 @@ export { ErrorBoundary } from './errorBoundary'
 export { createErrorHandling } from './errorHandling'
 export { markAsHandled } from './handledErrors'
 export type {
+  BoundaryError,
   CaughtError,
   ComponentError,
   ErrorBoundaryActions,
@@ -14,5 +15,7 @@ export type {
   GlobalError,
   PromiseRejectionError,
   ReportedError,
+  UseErrorHandlingReturn,
   VuePhase,
 } from './types'
+export { useErrorHandling } from './useErrorHandling'

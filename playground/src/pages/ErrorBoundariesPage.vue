@@ -2,6 +2,7 @@
 import { ErrorBoundary } from '@side-xp/vue-error-handling'
 import { type Component, defineAsyncComponent, ref } from 'vue'
 import FaultyComponent from '../components/FaultyComponent.vue'
+import LiveFeed from '../components/LiveFeed.vue'
 
 /** Delay of the async component loader, to see it loading. */
 const LOADING_DELAY_MS = 500
@@ -99,5 +100,23 @@ function save(): void {
         <p class="fallback">Handled by the outer boundary: {{ error.message }}.</p>
       </template>
     </ErrorBoundary>
+  </section>
+  <section>
+    <h2>Reported errors</h2>
+    <p>
+      The feed parses its messages in a callback that Vue doesn't call, and reports the errors with
+      <code>useErrorHandling()</code>: they go to the closest boundary, like a thrown error.
+    </p>
+    <h3>In a boundary</h3>
+    <ErrorBoundary>
+      <LiveFeed />
+      <template #fallback="{ error, retry }">
+        <p class="fallback">The feed stopped ({{ error.message }}).</p>
+        <button type="button" @click="retry">Reconnect</button>
+      </template>
+    </ErrorBoundary>
+    <h3>Outside of a boundary</h3>
+    <p>The errors go to the app, which displays a notification.</p>
+    <LiveFeed />
   </section>
 </template>

@@ -53,11 +53,12 @@ export function createGlobalError(event: ErrorEvent): GlobalError {
   }
 }
 
-/** Creates the normalized error of an error reported by the app. */
-export function createReportedError(error: unknown): ReportedError {
+/** Creates the normalized error of an error reported by the app, from the given component if any. */
+export function createReportedError(error: unknown, instance: ComponentPublicInstance | null = null): ReportedError {
   return {
     source: 'reported',
     error,
     message: getErrorMessage(error),
+    instance,
   }
 }

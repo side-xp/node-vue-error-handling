@@ -51,7 +51,7 @@ The errors are caught from all their sources:
 | Errors of the components (setup, render, hooks, watchers, event handlers declared in templates...) | `app.config.errorHandler` | `component` |
 | Promises rejected without being awaited or caught | `unhandledrejection` event | `promise` |
 | Errors thrown outside of Vue (timers, listeners added with `addEventListener()`...) | `error` event | `global` |
-| Errors caught by the app, and reported | `report()` | `reported` |
+| Errors caught by the app, and reported | `report()` (see [Report errors](#report-errors)) | `reported` |
 
 > Like Vue does with the errors of the components once an error handler is set, the browser doesn't log the `promise` and `global` errors anymore: they're given to `onError()` instead, which logs them by default. If you replace `onError()` (e.g. with a monitoring service), log them yourself if you still want them in the console.
 
@@ -84,15 +84,15 @@ import { ErrorBoundary } from '@side-xp/vue-error-handling'
 
 An error goes up from the component where it happened, and stops at the first boundary that handles it. A boundary only handles the errors it can display:
 
-- The errors that prevent its content from being displayed (`setup`, `render`, `mount` and `asyncComponent` phases) replace the content with the `fallback` slot. Without a `fallback` slot, the boundary doesn't handle them.
+- The errors that prevent its content from being displayed (`setup`, `render`, `mount` and `asyncComponent` phases), and the errors reported by its content (see [Report errors](#report-errors)), replace the content with the `fallback` slot. Without a `fallback` slot, the boundary doesn't handle them.
 - The other errors leave the content usable: the content stays, and the `default` slot receives the error, to display it next to the content.
-- The errors that don't match its `filter` continue to the parent boundaries, then to `onUnhandledError()`. By default, a boundary only handles the errors that prevent its content from being displayed.
+- The errors that don't match its `filter` continue to the parent boundaries, then to `onUnhandledError()`. By default, a boundary only handles the errors that prevent its content from being displayed, and the reported errors.
 
 The errors handled by a boundary are still given to `onError()` (e.g. for monitoring), but not to `onUnhandledError()`. The ignored errors are not handled by the boundaries.
 
 | Prop | Default | Description |
 |---|---|---|
-| `filter` | `['setup', 'render', 'mount', 'asyncComponent']` | The errors to handle: a list of phases, or a function that returns `true` for the errors to handle (it receives the `CaughtError`) |
+| `filter` | `['setup', 'render', 'mount', 'asyncComponent', 'reported']` | The errors to handle: a list of phases (and `'reported'` for the reported errors), or a function that returns `true` for the errors to handle (it receives the `CaughtError`) |
 
 Both slots receive the `error` (`null` in the `default` slot when there's none), and the actions:
 
@@ -103,7 +103,31 @@ Both slots receive the `error` (`null` in the `default` slot when there's none),
 
 ### Report errors
 
-To handle an error caught in the app's code like the others, keep the object returned by `createErrorHandling()`, and call `report()`:
+Some errors never reach Vue: the ones caught by the app on purpose (`try...catch`), or thrown in callbacks that Vue doesn't call (timers, sockets, third-party libraries). Report them to handle them like the others.
+
+In a component, use `useErrorHandling()` (in its `setup()`): the reported error goes to the closest error boundary first, then to the parent boundaries, then to `onUnhandledError()`, like a thrown error.
+
+```vue
+<script setup lang="ts">
+import { useErrorHandling } from '@side-xp/vue-error-handling'
+
+const { report } = useErrorHandling()
+
+socket.on('message', (message) => {
+  try {
+    applyUpdate(message)
+  } catch (error) {
+    report(error)
+  }
+})
+</script>
+```
+
+A reported error means the component can't work properly anymore: a boundary replaces its content with the `fallback` slot (and `retry()` displays it again from scratch). To display a reported error next to the content instead, keep it in the component's own state.
+
+> The errors reported from the `fallback` slot of a boundary go to its parent boundaries. The errors reported after the boundary is unmounted (e.g. by a timer that wasn't cleared) go to `onUnhandledError()`.
+
+Outside of a component, keep the object returned by `createErrorHandling()`, and call its `report()`. The error goes straight to `onUnhandledError()`, since there's no boundary to give it to:
 
 ```ts
 // errorHandling.ts
@@ -112,7 +136,7 @@ export const errorHandling = createErrorHandling({ onError, onUnhandledError })
 // main.ts
 app.use(errorHandling)
 
-// Anywhere in the app
+// Anywhere in the app (e.g. a store)
 try {
   await saveProfile()
 } catch (error) {
@@ -188,7 +212,7 @@ The errors thrown by the components, caught by Vue: setup, render, lifecycle hoo
 |---|---|
 | `promise` | `event`: the `unhandledrejection` event (e.g. to get the rejected `promise`) |
 | `global` | `event`: the `error` event (e.g. to get the file and line of the error). For a script loaded from another origin without CORS, the browser hides the error: `error` is `null`, and `message` is `'Script error.'` |
-| `reported` | |
+| `reported` | `instance`: the component that reported the error with `useErrorHandling()`, or `null` when reported with the `report()` of `createErrorHandling()` |
 
 ## Contributing
 

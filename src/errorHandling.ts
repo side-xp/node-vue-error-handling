@@ -1,4 +1,4 @@
-import type { App, AppConfig, InjectionKey } from 'vue'
+import { type App, type AppConfig, type InjectionKey, inject } from 'vue'
 import {
   createComponentError,
   createGlobalError,
@@ -12,16 +12,27 @@ import type { CaughtError, ErrorHandling, ErrorHandlingOptions } from './types'
 /** Default minimum delay before an error with the same message is given to `onUnhandledError()` again. */
 const DEFAULT_THROTTLE_MS = 5_000
 
-/** What the error boundaries get from the error handling installed on the app. */
+/** What the error boundaries and `useErrorHandling()` get from the error handling installed on the app. */
 export interface ErrorHandlingContext {
   /** Checks if the app ignores the given error. */
   isIgnored(caught: CaughtError): boolean
   /** Gives an error handled by an error boundary to `onError()`, unless it was already handled. */
   handleBoundaryError(caught: CaughtError): void
+  /** Gives an error that no error boundary handled to the app, unless it was already handled or it's ignored. */
+  handleUnhandledError(caught: CaughtError): void
 }
 
 /** Injection key of the error handling installed on the app. */
-export const ERROR_HANDLING_KEY: InjectionKey<ErrorHandlingContext> = Symbol('errorHandling')
+const ERROR_HANDLING_KEY: InjectionKey<ErrorHandlingContext> = Symbol('errorHandling')
+
+/** Gets the error handling installed on the app, for the given feature (named in the error if it's not installed). */
+export function injectErrorHandling(feature: string): ErrorHandlingContext {
+  const context: ErrorHandlingContext | undefined = inject(ERROR_HANDLING_KEY, undefined)
+  if (!context) {
+    throw new Error(`${feature} requires the error handling: install it with \`app.use(createErrorHandling())\` first.`)
+  }
+  return context
+}
 
 /** Logs a caught error to the console, as Vue does when the app has no error handler. */
 function logCaughtError(caught: CaughtError): void {
@@ -109,6 +120,8 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
       markAsHandled(caught.error)
       callSafely(onError, caught)
     },
+
+    handleUnhandledError: handleError,
   }
 
   return {

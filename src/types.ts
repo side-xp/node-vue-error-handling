@@ -60,9 +60,11 @@ export interface GlobalError extends CaughtErrorBase {
   event: ErrorEvent
 }
 
-/** An error reported with `report()`. */
+/** An error reported by the app, with `report()`. */
 export interface ReportedError extends CaughtErrorBase {
   source: 'reported'
+  /** The component that reported the error (with `useErrorHandling()`), if any. */
+  instance: ComponentPublicInstance | null
 }
 
 /** An error caught by the error handling, with the context it was caught in. Narrow it with its `source`. */
@@ -93,18 +95,37 @@ export interface ErrorHandlingOptions {
 export interface ErrorHandling {
   /** Registers the error handlers on the app and the window. They're removed when the app is unmounted. */
   install(app: App): void
-  /** Reports an error caught by the app (e.g. in a `try...catch`), so it's handled like the others. */
+  /**
+   * Reports an error caught by the app (e.g. in a `try...catch`), so it's handled like the others.
+   * It skips the error boundaries: in a component, use the `report()` of `useErrorHandling()` instead.
+   */
   report(error: unknown): void
 }
 
-/** The errors an error boundary handles: a list of phases, or a function that returns `true` for the errors to handle. */
-export type ErrorFilter = VuePhase[] | ((caught: ComponentError) => boolean)
+/** What `useErrorHandling()` returns. */
+export interface UseErrorHandlingReturn {
+  /**
+   * Reports an error caught by the component (e.g. in a `try...catch`, or in a callback that Vue doesn't call).
+   * It goes to the closest error boundary first, then to the parent boundaries, then to the app (like a thrown error).
+   */
+  report(error: unknown): void
+}
+
+/** An error that error boundaries can handle: thrown by a component, or reported by a component. */
+export type BoundaryError = ComponentError | ReportedError
+
+/**
+ * The errors an error boundary handles: a list of phases (and `'reported'` for the reported errors), or a function
+ * that returns `true` for the errors to handle.
+ */
+export type ErrorFilter = (VuePhase | 'reported')[] | ((caught: BoundaryError) => boolean)
 
 /** Props of the `ErrorBoundary` component. */
 export interface ErrorBoundaryProps {
   /**
    * The errors this boundary handles. The others continue to the parent boundaries, then to the app.
-   * Defaults to the errors that prevent the content from being displayed (`setup`, `render`, `mount`, `asyncComponent`).
+   * Defaults to the errors that prevent the content from being displayed (`setup`, `render`, `mount`, `asyncComponent`),
+   * and the reported errors.
    */
   filter?: ErrorFilter
 }
@@ -120,7 +141,7 @@ export interface ErrorBoundaryActions {
 /** Slots of the `ErrorBoundary` component. */
 export interface ErrorBoundarySlots {
   /** The content. Receives the handled error that left the content usable (e.g. in an event handler), if any. */
-  default?(props: ErrorBoundaryActions & { error: ComponentError | null }): VNodeChild
+  default?(props: ErrorBoundaryActions & { error: BoundaryError | null }): VNodeChild
   /** Displayed instead of the content when it can't be displayed. Without it, the boundary doesn't handle these errors. */
-  fallback?(props: ErrorBoundaryActions & { error: ComponentError }): VNodeChild
+  fallback?(props: ErrorBoundaryActions & { error: BoundaryError }): VNodeChild
 }

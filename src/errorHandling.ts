@@ -1,96 +1,32 @@
-import type { App, AppConfig, ComponentPublicInstance } from 'vue'
+import type { App, AppConfig, InjectionKey } from 'vue'
+import {
+  createComponentError,
+  createGlobalError,
+  createPromiseRejectionError,
+  createReportedError,
+} from './caughtErrors'
 import { isHandled, markAsHandled } from './handledErrors'
-import type {
-  CaughtError,
-  ComponentError,
-  ErrorHandling,
-  ErrorHandlingOptions,
-  GlobalError,
-  PromiseRejectionError,
-} from './types'
-import { getVuePhase } from './vuePhases'
+import { callSafely, logError } from './safeCalls'
+import type { CaughtError, ErrorHandling, ErrorHandlingOptions } from './types'
 
 /** Default minimum delay before an error with the same message is given to `onUnhandledError()` again. */
 const DEFAULT_THROTTLE_MS = 5_000
 
-// #region Errors
-
-/** Gets a readable message from any thrown value. */
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message || error.name
-  }
-
-  try {
-    return String(error)
-  } catch {
-    // Some values can't be converted to a string (e.g. objects without prototype)
-    return 'Unknown error'
-  }
+/** What the error boundaries get from the error handling installed on the app. */
+export interface ErrorHandlingContext {
+  /** Checks if the app ignores the given error. */
+  isIgnored(caught: CaughtError): boolean
+  /** Gives an error handled by an error boundary to `onError()`, unless it was already handled. */
+  handleBoundaryError(caught: CaughtError): void
 }
 
-/** Creates the normalized error of an error caught by Vue. */
-function createComponentError(error: unknown, instance: ComponentPublicInstance | null, info: string): ComponentError {
-  return {
-    source: 'component',
-    error,
-    message: getErrorMessage(error),
-    phase: getVuePhase(info),
-    vueInfo: info,
-    instance,
-  }
-}
-
-/** Creates the normalized error of a promise rejected without being caught. */
-function createPromiseRejectionError(event: PromiseRejectionEvent): PromiseRejectionError {
-  return {
-    source: 'promise',
-    error: event.reason,
-    message: getErrorMessage(event.reason),
-    event,
-  }
-}
-
-/** Creates the normalized error of an error thrown outside of Vue. */
-function createGlobalError(event: ErrorEvent): GlobalError {
-  return {
-    source: 'global',
-    error: event.error,
-    // The error is hidden for the scripts of other origins, but the event still has a message
-    message: event.error == null ? event.message : getErrorMessage(event.error),
-    event,
-  }
-}
-
-// #endregion
-
-// #region Console
-
-/** Logs an error to the console. */
-function logError(error: unknown): void {
-  // biome-ignore lint/suspicious/noConsole: last resort of the errors, when the app doesn't handle them or can't
-  console.error(error)
-}
+/** Injection key of the error handling installed on the app. */
+export const ERROR_HANDLING_KEY: InjectionKey<ErrorHandlingContext> = Symbol('errorHandling')
 
 /** Logs a caught error to the console, as Vue does when the app has no error handler. */
 function logCaughtError(caught: CaughtError): void {
   logError(caught.error)
 }
-
-/** Calls a callback given by the app. An error thrown by the callback is only logged, since handling it could loop. */
-function callSafely<TArgs extends unknown[], TResult>(
-  callback: (...args: TArgs) => TResult,
-  ...args: TArgs
-): TResult | undefined {
-  try {
-    return callback(...args)
-  } catch (callbackError) {
-    logError(callbackError)
-    return undefined
-  }
-}
-
-// #endregion
 
 /** Creates the error handling of an app: catches the errors, normalizes them, and gives them to the app. */
 export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHandling {
@@ -116,7 +52,12 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     return false
   }
 
-  /** Gives a caught error to the app, unless it was already handled or it's ignored. */
+  /** Checks if the app ignores the given error. An `ignore()` that fails doesn't ignore it, so it can't disappear silently. */
+  function isIgnored(caught: CaughtError): boolean {
+    return ignore !== undefined && callSafely(ignore, caught) === true
+  }
+
+  /** Gives an error that nothing else handled to the app, unless it was already handled or it's ignored. */
   function handleError(caught: CaughtError): void {
     // The same error can reach several handlers (e.g. reported, then rethrown)
     if (isHandled(caught.error)) {
@@ -124,8 +65,7 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     }
     markAsHandled(caught.error)
 
-    // An `ignore()` that fails doesn't ignore the error, so it can't disappear silently
-    if (ignore && callSafely(ignore, caught) === true) {
+    if (isIgnored(caught)) {
       return
     }
 
@@ -159,12 +99,24 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     }
   }
 
+  const context: ErrorHandlingContext = {
+    isIgnored,
+
+    handleBoundaryError(caught: CaughtError): void {
+      if (isHandled(caught.error)) {
+        return
+      }
+      markAsHandled(caught.error)
+      callSafely(onError, caught)
+    },
+  }
+
   return {
     install(app: App): void {
       // An error handler set before this one still receives the errors
       const previousErrorHandler: AppConfig['errorHandler'] = app.config.errorHandler
 
-      // Errors of the components
+      // Errors of the components that no error boundary handled
       app.config.errorHandler = (error, instance, info) => {
         handleError(createComponentError(error, instance, info))
         if (previousErrorHandler) {
@@ -178,10 +130,12 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
         removeWindowHandlers()
         app.config.errorHandler = previousErrorHandler
       })
+
+      app.provide(ERROR_HANDLING_KEY, context)
     },
 
     report(error: unknown): void {
-      handleError({ source: 'reported', error, message: getErrorMessage(error) })
+      handleError(createReportedError(error))
     },
   }
 }

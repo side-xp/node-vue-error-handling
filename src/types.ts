@@ -1,4 +1,4 @@
-import type { App, ComponentPublicInstance } from 'vue'
+import type { App, ComponentPublicInstance, VNodeChild } from 'vue'
 
 /** Phase of a component in which Vue caught an error, normalized from the different forms of the `info` given by Vue. */
 export type VuePhase =
@@ -95,4 +95,32 @@ export interface ErrorHandling {
   install(app: App): void
   /** Reports an error caught by the app (e.g. in a `try...catch`), so it's handled like the others. */
   report(error: unknown): void
+}
+
+/** The errors an error boundary handles: a list of phases, or a function that returns `true` for the errors to handle. */
+export type ErrorFilter = VuePhase[] | ((caught: ComponentError) => boolean)
+
+/** Props of the `ErrorBoundary` component. */
+export interface ErrorBoundaryProps {
+  /**
+   * The errors this boundary handles. The others continue to the parent boundaries, then to the app.
+   * Defaults to the errors that prevent the content from being displayed (`setup`, `render`, `mount`, `asyncComponent`).
+   */
+  filter?: ErrorFilter
+}
+
+/** Actions given to the slots of an error boundary. */
+export interface ErrorBoundaryActions {
+  /** Clears the error, and displays the content again from scratch (e.g. an async component loads again). */
+  retry(): void
+  /** Clears the error, without displaying the content again from scratch. */
+  clear(): void
+}
+
+/** Slots of the `ErrorBoundary` component. */
+export interface ErrorBoundarySlots {
+  /** The content. Receives the handled error that left the content usable (e.g. in an event handler), if any. */
+  default?(props: ErrorBoundaryActions & { error: ComponentError | null }): VNodeChild
+  /** Displayed instead of the content when it can't be displayed. Without it, the boundary doesn't handle these errors. */
+  fallback?(props: ErrorBoundaryActions & { error: ComponentError }): VNodeChild
 }

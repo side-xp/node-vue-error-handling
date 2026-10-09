@@ -55,6 +55,52 @@ The errors are caught from all their sources:
 
 > Like Vue does with the errors of the components once an error handler is set, the browser doesn't log the `promise` and `global` errors anymore: they're given to `onError()` instead, which logs them by default. If you replace `onError()` (e.g. with a monitoring service), log them yourself if you still want them in the console.
 
+### Error boundaries
+
+Wrap any part of the app with an `ErrorBoundary` to handle its errors in place, instead of breaking the page or reaching `onUnhandledError()`:
+
+```vue
+<script setup lang="ts">
+import { ErrorBoundary } from '@side-xp/vue-error-handling'
+</script>
+
+<template>
+  <!-- A widget that can't be displayed is replaced by its fallback, the rest of the page still works -->
+  <ErrorBoundary>
+    <WeatherWidget />
+    <template #fallback="{ error, retry }">
+      <p>The weather couldn't be loaded.</p>
+      <button @click="retry">Retry</button>
+    </template>
+  </ErrorBoundary>
+
+  <!-- The errors of a button are displayed under it, instead of a notification -->
+  <ErrorBoundary :filter="['eventHandler']" v-slot="{ error, clear }">
+    <button @click="clear(); save()">Save</button>
+    <p v-if="error">The profile couldn't be saved.</p>
+  </ErrorBoundary>
+</template>
+```
+
+An error goes up from the component where it happened, and stops at the first boundary that handles it. A boundary only handles the errors it can display:
+
+- The errors that prevent its content from being displayed (`setup`, `render`, `mount` and `asyncComponent` phases) replace the content with the `fallback` slot. Without a `fallback` slot, the boundary doesn't handle them.
+- The other errors leave the content usable: the content stays, and the `default` slot receives the error, to display it next to the content.
+- The errors that don't match its `filter` continue to the parent boundaries, then to `onUnhandledError()`. By default, a boundary only handles the errors that prevent its content from being displayed.
+
+The errors handled by a boundary are still given to `onError()` (e.g. for monitoring), but not to `onUnhandledError()`. The ignored errors are not handled by the boundaries.
+
+| Prop | Default | Description |
+|---|---|---|
+| `filter` | `['setup', 'render', 'mount', 'asyncComponent']` | The errors to handle: a list of phases, or a function that returns `true` for the errors to handle (it receives the `CaughtError`) |
+
+Both slots receive the `error` (`null` in the `default` slot when there's none), and the actions:
+
+- `retry()`: clears the error, and displays the content again from scratch (e.g. an async component loads again).
+- `clear()`: clears the error, without displaying the content again from scratch.
+
+> The errors of the `fallback` slot continue to the parent boundaries. The errors of plain elements and template expressions placed directly in the boundary are handled too (Vue normally skips the boundary for them: the boundary renders its content through an internal child component to prevent it).
+
 ### Report errors
 
 To handle an error caught in the app's code like the others, keep the object returned by `createErrorHandling()`, and call `report()`:
@@ -76,7 +122,7 @@ try {
 
 ### Each error is handled once
 
-The same error can reach several handlers (e.g. reported, then rethrown). It's only handled the first time. To have an error ignored when it's thrown (e.g. handled by the app, but rethrown on purpose), mark it as handled:
+The same error can reach several handlers (e.g. reported, then rethrown). It's only given to `onError()` and `onUnhandledError()` the first time. An error boundary still displays an error that was already handled (e.g. a cached failure thrown again after a retry), since its content can't be displayed anyway. To have an error ignored when it's thrown (e.g. handled by the app, but rethrown on purpose), mark it as handled:
 
 ```ts
 import { markAsHandled } from '@side-xp/vue-error-handling'

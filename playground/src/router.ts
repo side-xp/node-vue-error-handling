@@ -24,5 +24,10 @@ export const router: Router = createRouter({
       name: 'outsideErrors',
       component: () => import('./pages/OutsideErrorsPage.vue'),
     },
+    {
+      path: '/error-boundaries',
+      name: 'errorBoundaries',
+      component: () => import('./pages/ErrorBoundariesPage.vue'),
+    },
   ],
 })

@@ -54,6 +54,16 @@ export const router: Router = createRouter({
       },
     },
     {
+      path: '/chunk-load-errors',
+      name: 'chunkLoadErrors',
+      component: () => import('./pages/ChunkLoadErrorsPage.vue'),
+    },
+    {
+      path: '/deployed-page',
+      name: 'deployedPage',
+      component: () => import('./pages/DeployedPage.vue'),
+    },
+    {
       path: '/navigation-errors/setup-fails',
       name: 'setupFails',
       component: () => import('./pages/FailingPage.vue'),

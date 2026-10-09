@@ -131,6 +131,12 @@ Both slots receive the `error` (`null` in the `default` slot when there's none),
 
 > The errors of the `fallback` slot continue to the parent boundaries. The errors of plain elements and template expressions placed directly in the boundary are handled too (Vue normally skips the boundary for them: the boundary renders its content through an internal child component to prevent it).
 
+In development, the package warns (like Vue, through `app.config.warnHandler`) about the boundaries that can't work as intended:
+
+- A boundary without a `fallback` slot that can never handle an error: with the `navigation` prop, or with a `filter` that only accepts the errors that need a fallback (e.g. the default one).
+- A `navigation` boundary without the `router` option of `createErrorHandling()`.
+- Several navigation boundaries mounted at once.
+
 ### Built-in components
 
 **`<Suspense>`**: the errors of the async setups (`async setup()`, top-level `await` in `<script setup>`) are handled like the other `setup` errors. Place the boundary **around** the `<Suspense>` (see [Known issues](#known-issues)): `retry()` then displays it again from scratch, and the async setups run again.

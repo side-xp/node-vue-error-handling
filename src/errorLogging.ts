@@ -2,8 +2,8 @@ import type { ComponentPublicInstance } from 'vue'
 import { logError } from './safeCalls'
 import type { CaughtError, HandlingInfo } from './types'
 
-/** Prefix of the logs, to tell them from the other logs of the app. */
-const LOG_PREFIX = '[vue-error-handling]'
+/** Prefix of the logs and warnings, to tell them from the other logs of the app. */
+export const LOG_PREFIX = '[vue-error-handling]'
 
 /** Gets the name of a component, as Vue displays it in its warnings. */
 function getComponentName(instance: ComponentPublicInstance): string {

@@ -1,4 +1,4 @@
-import { type App, type AppConfig, type InjectionKey, inject } from 'vue'
+import { type App, type AppConfig, type InjectionKey, inject, warn } from 'vue'
 import {
   createComponentError,
   createGlobalError,
@@ -8,7 +8,7 @@ import {
 } from './caughtErrors'
 import { isViteChunkLoadError, trackChunkLoadErrors, tryReloadPage } from './chunkLoadErrors'
 import { isBrowser } from './environment'
-import { logCaughtError } from './errorLogging'
+import { LOG_PREFIX, logCaughtError } from './errorLogging'
 import { isHandled, markAsHandled } from './handledErrors'
 import { callSafely } from './safeCalls'
 import type { CaughtError, ErrorHandling, ErrorHandlingOptions, HandlingBoundary, NavigationError } from './types'
@@ -26,6 +26,8 @@ export interface NavigationBoundaryHandle {
 
 /** What the error boundaries and `useErrorHandling()` get from the error handling installed on the app. */
 export interface ErrorHandlingContext {
+  /** Whether the error handling has a router, to handle the navigation errors. */
+  hasRouter: boolean
   /** Checks if the given error is a failure to load a chunk (reported by Vite, or detected by the app). */
   isChunkLoadError(error: unknown): boolean
   /** Checks if the app ignores the given error. */
@@ -190,6 +192,7 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
   }
 
   const context: ErrorHandlingContext = {
+    hasRouter: router !== undefined,
     isChunkLoadError,
     isIgnored,
 
@@ -204,6 +207,11 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     handleUnhandledError: handleError,
 
     registerNavigationBoundary(boundary: NavigationBoundaryHandle): () => void {
+      if (navigationBoundaries.size > 0) {
+        warn(
+          `${LOG_PREFIX} Several navigation boundaries are mounted: only the first one mounted displays the navigation errors. Use a single one (e.g. around the root router view).`,
+        )
+      }
       navigationBoundaries.add(boundary)
       return () => {
         navigationBoundaries.delete(boundary)

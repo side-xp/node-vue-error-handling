@@ -16,10 +16,12 @@ import {
   type SlotsType,
   shallowRef,
   type VNodeChild,
+  warn,
   watch,
 } from 'vue'
 import { createComponentError } from './caughtErrors'
 import { type ErrorHandlingContext, injectErrorHandling, type NavigationBoundaryHandle } from './errorHandling'
+import { LOG_PREFIX } from './errorLogging'
 import { callSafely } from './safeCalls'
 import type {
   BoundaryError,
@@ -68,6 +70,28 @@ function matchesFilter(caught: ComponentError | ReportedError, filter: ErrorFilt
 }
 
 /**
+ * Warns when a boundary can never handle an error: without a fallback, it can't display the errors that need one (the
+ * navigation errors, and the errors that prevent the content from being displayed). A filter function can't be checked.
+ */
+function warnIfUseless(props: ErrorBoundaryProps, hasFallback: boolean): void {
+  if (hasFallback) {
+    return
+  }
+  if (props.navigation) {
+    warn(
+      `${LOG_PREFIX} An ErrorBoundary with the \`navigation\` prop has no \`fallback\` slot: it can't display the navigation errors.`,
+    )
+    return
+  }
+  const filter: ErrorFilter = props.filter ?? DEFAULT_FILTER
+  if (Array.isArray(filter) && filter.every((item) => item === 'reported' || BREAKING_PHASES.has(item))) {
+    warn(
+      `${LOG_PREFIX} An ErrorBoundary has no \`fallback\` slot, and its \`filter\` only accepts errors that need one: it handles no error. Add a \`fallback\` slot, or accept other phases in its \`filter\` (e.g. \`['eventHandler']\`).`,
+    )
+  }
+}
+
+/**
  * Renders the content of an error boundary, and provides the boundary to it.
  * Vue gives the errors of plain elements and template expressions to the component that renders them, and starts
  * looking for `onErrorCaptured()` hooks from its parent: rendering the content in this child component lets the
@@ -113,6 +137,8 @@ export const ErrorBoundary = defineComponent(
 
     /** This boundary. */
     const self: ComponentInternalInstance | null = getCurrentInstance()
+
+    warnIfUseless(props, slots.fallback !== undefined)
 
     /**
      * Checks if an error comes from the content, from the component in which it happened.
@@ -187,6 +213,11 @@ export const ErrorBoundary = defineComponent(
       () => props.navigation,
       (isNavigation) => {
         if (isNavigation && !unregisterNavigation) {
+          if (!context.hasRouter) {
+            warn(
+              `${LOG_PREFIX} The \`navigation\` prop of an ErrorBoundary has no effect without the \`router\` option of \`createErrorHandling()\`.`,
+            )
+          }
           unregisterNavigation = context.registerNavigationBoundary(navigationHandle)
         } else if (!isNavigation && unregisterNavigation) {
           unregisterNavigation()

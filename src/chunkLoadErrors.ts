@@ -1,3 +1,4 @@
+import { isBrowser } from './environment'
 import { loadPage } from './pageLoading'
 
 /** Session storage key of the timestamp of the last automatic reload. */
@@ -16,6 +17,10 @@ export function isViteChunkLoadError(error: unknown): boolean {
 
 /** Records the errors reported by Vite as chunk loading failures. Returns a function that stops recording them. */
 export function trackChunkLoadErrors(): () => void {
+  if (!isBrowser()) {
+    return () => {}
+  }
+
   // In production builds, Vite dispatches this event when a lazy loaded chunk (or one of its dependencies) fails to
   // load, then rethrows the error
   const onPreloadError = (event: Event): void => {
@@ -31,6 +36,11 @@ export function trackChunkLoadErrors(): () => void {
 
 /** Loads the given URL, unless an automatic reload already happened recently. Returns `true` if the page is loading. */
 export function tryReloadPage(url: string): boolean {
+  // On a server (SSR), there's no page to load: the error is handled like the others
+  if (!isBrowser()) {
+    return false
+  }
+
   try {
     const lastReload: number = Number(sessionStorage.getItem(RELOAD_STORAGE_KEY))
     if (Date.now() - lastReload < RELOAD_COOLDOWN_MS) {

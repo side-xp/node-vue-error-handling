@@ -198,7 +198,7 @@ Wrap the router view with a boundary to handle the errors of the pages (e.g. in 
 </template>
 ```
 
-- `retry()` navigates to the page again if it failed to load, or displays it again from scratch.
+- `retry()` navigates to the page again if it failed to load (with `router.push()`), or displays it again from scratch. The router doesn't tell how the failed navigation was made: retrying a `replace()` or a back/forward navigation adds a history entry. To navigate differently, use the route of the error in the fallback (e.g. `router.replace(error.to.fullPath)`, or `router.back()`).
 - The error is cleared after each successful navigation: the user can leave it with any link, or the back button of the browser. Including a link to the current page: after a navigation error, the router stays on the previous page (e.g. a "Home" link, when the navigation from Home failed), and a link to the page that failed displays it again from scratch.
 - Without a navigation boundary (or without its `fallback` slot), the navigation errors go to `onUnhandledError()`.
 
@@ -298,6 +298,10 @@ try {
 
 The handled errors are recorded in a `WeakSet`: the error objects are not modified, and not kept in memory. Primitive values (e.g. `throw 'message'`) can't be recorded: they're handled every time they reach a handler, and can't be marked as handled.
 
+### Server-side rendering
+
+The plugin can be installed on an app rendered on a server: it doesn't access `window` there. On the server, only the errors of the components and of the navigations are caught (there are no `promise` and `global` errors), and the page is never loaded again after a chunk loading failure. See [Known issues](#known-issues) for the boundaries.
+
 ### Options
 
 | Option | Default | Description |
@@ -357,6 +361,7 @@ The errors thrown by the components, caught by Vue: setup, render, lifecycle hoo
 ## Known issues
 
 - **Boundary inside a `<Suspense>` that is still loading**: it can't replace an async setup that fails with its fallback. Vue renders the failed component after its error, while the boundary already replaced it, and crashes (`Cannot read properties of null (reading 'insertBefore')`). It happens with any `onErrorCaptured()` hook, even without this package. Place the boundary around the `<Suspense>` instead. Once the `<Suspense>` is resolved, the boundaries inside it work as usual.
+- **Boundary rendered on a server**: it handles the errors of its content (they're given to `onError()` as handled by the boundary), but the server renders the failed content (empty) instead of the fallback. The server renders the app in a single pass: the boundary is already rendered when its content fails. Vue's `onErrorCaptured()` has the same limitation.
 
 ## Contributing
 

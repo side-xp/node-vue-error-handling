@@ -7,6 +7,7 @@ import {
   createReportedError,
 } from './caughtErrors'
 import { isViteChunkLoadError, trackChunkLoadErrors, tryReloadPage } from './chunkLoadErrors'
+import { isBrowser } from './environment'
 import { logCaughtError } from './errorLogging'
 import { isHandled, markAsHandled } from './handledErrors'
 import { callSafely } from './safeCalls'
@@ -120,6 +121,11 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
 
   /** Registers the handlers of the errors thrown outside of Vue. Returns a function that removes them. */
   function handleWindowErrors(): () => void {
+    // On a server (SSR), there's no window: only the errors of the components and the navigations are caught
+    if (!isBrowser()) {
+      return () => {}
+    }
+
     // Promises rejected without being awaited or caught
     const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
       // The error is given to `onError()` instead, which logs it by default (as Vue does with the component errors)
@@ -205,6 +211,8 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
     },
 
     async retryNavigation(caught: NavigationError): Promise<void> {
+      // Always a push: `router.onError()` doesn't tell whether the failed navigation was a replace or a back/forward
+      // (documented, the fallback can navigate itself with `caught.to`)
       try {
         await router?.push(caught.to.fullPath)
       } catch {

@@ -1,6 +1,6 @@
 {
   "name": "@side-xp/vue-error-handling",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Handles the routing and component errors of a Vue app at the closest level possible, so they never fail silently.",
   "keywords": [
     "vue",

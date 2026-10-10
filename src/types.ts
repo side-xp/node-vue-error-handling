@@ -223,7 +223,9 @@ export interface ErrorBoundaryProps {
 /** Actions given to the slots of an error boundary. */
 export interface ErrorBoundaryActions {
   /**
-   * Clears the error, and displays the content again from scratch (e.g. an async component loads again).
+   * Clears the error, and displays the content again from scratch (e.g. an async component loads again). After a
+   * chunk loading failure (`isChunkLoadError`), some browsers (e.g. Chrome) keep the failure until the page is
+   * reloaded: offer to reload the app instead.
    * For a navigation error, navigates to the page again.
    */
   retry(): void

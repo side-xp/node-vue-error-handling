@@ -126,7 +126,7 @@ The ignored errors are not handled by the boundaries.
 
 Both slots receive the `error` (`null` in the `default` slot when there's none), and the actions:
 
-- `retry()`: clears the error, and displays the content again from scratch (e.g. an async component loads again). For a navigation error, navigates to the page again.
+- `retry()`: clears the error, and displays the content again from scratch (e.g. an async component loads again, except after a chunk loading failure in some browsers: see [Chunk loading failures](#chunk-loading-failures-new-deployments)). For a navigation error, navigates to the page again.
 - `clear()`: clears the error, without displaying the content again from scratch.
 
 > The errors of the `fallback` slot continue to the parent boundaries. The errors of plain elements and template expressions placed directly in the boundary are handled too (Vue normally skips the boundary for them: the boundary renders its content through an internal child component to prevent it).
@@ -218,6 +218,7 @@ When a new version of the app is deployed, the chunks of the previous version ar
 
 - At most once every 10 seconds (recorded in `sessionStorage`): if the page still fails to load, the navigation boundary displays the error instead of reloading in a loop. Without storage, the page is never loaded again automatically.
 - Only for the navigation errors, which give the page to load. The other failures (e.g. an async component) are flagged with `isChunkLoadError`, to react in a fallback (e.g. offer to reload the app).
+- `retry()` can't fix a chunk loading failure in every browser: Chrome keeps the failure of a module that failed to load, and gives it again to every `import()` of the same URL until the page is reloaded (even once the chunk is available again). Firefox loads it again. Offer to reload the app for these errors instead (as below).
 - Disable it with `reloadOnChunkLoadError: false`.
 
 ```vue

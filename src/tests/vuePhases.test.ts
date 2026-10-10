@@ -1,8 +1,21 @@
-/// <reference types="vite/client" />
-import vueProductionBuild from '@vue/runtime-core/dist/runtime-core.cjs.prod.js?raw'
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import * as Vue from 'vue'
 import { getVuePhase, VUE_ERROR_TYPES } from '@/vuePhases'
+
+/**
+ * Source of the production build of the installed Vue version. Resolved from `vue` itself: `@vue/runtime-core` isn't a
+ * direct dependency, and isn't at the root of `node_modules` when another version of Vue is installed (e.g. the oldest
+ * supported one in the CI).
+ */
+const vueProductionBuild: string = readFileSync(
+  createRequire(createRequire(import.meta.url).resolve('vue')).resolve(
+    '@vue/runtime-core/dist/runtime-core.cjs.prod.js',
+  ),
+  'utf8',
+)
 
 /** Descriptions of the error types given by Vue in development builds (internal API). */
 const vueErrorTypeStrings: Record<string, string> | null = (

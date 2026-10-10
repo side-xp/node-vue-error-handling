@@ -39,6 +39,45 @@ jobs:
       # publint + attw: validates the published package shape (exports, types resolution).
       - run: npm run check:package
 
+      # The playgrounds are only type-checked by `npm run check`: building them catches a broken Vite or webpack setup.
+      # Their scenarios are checked by hand (see CONTRIBUTING.md).
+      - run: npm run playground:build
+      - run: npm run playground-webpack:build
+
+  # Runs the tests and the type-checking against the supported versions of the peer dependencies, other than the ones of
+  # the lockfile: the oldest supported Vue, and both major versions of Vue Router.
+  compatibility:
+    name: Tests (Vue ${{ matrix.vue }}, Vue Router ${{ matrix.vue-router }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest supported Vue. Vue Router 5 requires Vue ^3.5.34, so it's only tested with the latest Vue.
+          - vue: 3.5.0
+            vue-router: ^4
+          # Latest supported versions (a new major version of Vue is excluded by the peer range of the package)
+          - vue: ^3.5.0
+            vue-router: ^4
+          - vue: ^3.5.0
+            vue-router: ^5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm install --no-save "vue@${{ matrix.vue }}" "vue-router@${{ matrix.vue-router }}"
+      - name: Show the installed versions
+        run: node -p "'vue ' + require('vue/package.json').version + ', vue-router ' + require('vue-router/package.json').version"
+      - run: npm test
+      - run: npm run verify
+
   # Publishes the package to npm and creates a GitHub release via semantic-release.
   # `npm publish` runs the `prepack` (build) and `prepublishOnly` (check:package)
   # scripts, so a broken package can never be published.
@@ -46,7 +85,7 @@ jobs:
   # CONTRIBUTING.md).
   release:
     name: Release
-    needs: check
+    needs: [check, compatibility]
     concurrency:
       group: release
       cancel-in-progress: false

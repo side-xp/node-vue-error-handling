@@ -159,7 +159,7 @@ Vue gives the type of each error it catches to the error hooks (`info`), in a di
 `src/tests/vuePhases.test.ts` detects these changes, against the **installed** Vue version:
 
 - **"match the error types of the installed Vue version"** compares `VUE_ERROR_TYPES` to Vue's `ErrorTypeStrings` (codes and descriptions).
-- **"match the form of the error types in the production build"** checks that the production build of Vue (`@vue/runtime-core/dist/runtime-core.cjs.prod.js`) still builds its `info` as an error reference link. Vitest always runs the development build of Vue, so the production build is checked from its source.
+- **"match the form of the error types in the production build"** checks that the production build of Vue (`@vue/runtime-core/dist/runtime-core.cjs.prod.js`, resolved from the installed `vue`) still builds its `info` as an error reference link. Vitest always runs the development build of Vue, so the production build is checked from its source.
 
 #### When upgrading Vue
 
@@ -170,7 +170,7 @@ Vue is upgraded through the `vue` dev dependency (e.g. a Dependabot PR). Each up
 3. If the production form changed, update `ERROR_REFERENCE_URL` and `getVuePhase()` in `src/vuePhases.ts`, and the expected form in the test.
 4. Check the result in the playground, in both builds (see [Production builds](#production-builds)): the phases listed in the **Caught errors** panel must be the same.
 
-> The tests only check the installed version, but the table must also work with the oldest supported Vue version (see `peerDependencies`). If Vue removes an error type that older supported versions still give, keep it in the table, and relax the first test so it only checks that every error type of the installed version is in the table.
+> The table must also work with the oldest supported Vue version (see `peerDependencies`): the `compatibility` CI job runs the tests with it too (see [CI/CD](#cicd)). If Vue removes an error type that older supported versions still give, keep it in the table, and relax the first test so it only checks that every error type of the installed version is in the table.
 
 ### Building & publishing
 
@@ -190,10 +190,19 @@ Common types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `perf`, `ci`, 
 
 ## CI/CD
 
-The GitHub Actions workflow (`.github/workflows/ci.yml`) has two jobs:
+The GitHub Actions workflow (`.github/workflows/ci.yml`) has three jobs:
 
-- **`check`**: runs on every push to an integration branch and on **every pull request**: lint + types, tests (with a coverage comment on PRs), build, and package validation (publint + attw).
-- **`release`**: on push to `main` / `master` after `check` passes: `semantic-release` bumps the version, updates the changelog, **publishes to npm**, and cuts a GitHub Release.
+- **`check`**: runs on every push to an integration branch and on **every pull request**: lint + types (including the playgrounds), tests (with a coverage comment on PRs), build, package validation (publint + attw), and the builds of both playgrounds.
+- **`compatibility`**: on the same events, runs the tests and the type-checking against the supported versions of the peer dependencies, installed over the lockfile (`npm install --no-save`):
+
+  | Vue | Vue Router | Why |
+  |---|---|---|
+  | `3.5.0` | `^4` | Oldest supported Vue (Vue Router 5 requires Vue `^3.5.34`) |
+  | `^3.5.0` (latest) | `^4` | Latest Vue, previous major version of Vue Router |
+  | `^3.5.0` (latest) | `^5` | Latest versions |
+
+  When the peer dependency ranges change, update the matrix.
+- **`release`**: on push to `main` / `master` after `check` and `compatibility` pass: `semantic-release` bumps the version, updates the changelog, **publishes to npm**, and cuts a GitHub Release.
 
 A second workflow (`.github/workflows/commitlint.yml`) runs on pull requests only. It lints the PR title (which becomes the commit message when squash-merging) and every commit of the PR with `commitlint`, since commits made outside a local clone skip the Git hook. For Dependabot PRs, only the title is linted.
 

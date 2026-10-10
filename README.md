@@ -2,7 +2,9 @@
 
 Handles the routing and component errors of a Vue app at the closest level possible, so they never fail silently.
 
-> Work in progress: the package is being implemented feature by feature, and is not published yet.
+---
+🤖 This package has mostly been implemented using AI coding assistant to solve problems we had to deal with on several of our apps. It looks promising, brings a real solution, but expect some questionable implementation or use cases that are not covered yet. We will refine this package and its usage over time.
+---
 
 - [Why this package](#why-this-package)
 - [Requirements](#requirements)

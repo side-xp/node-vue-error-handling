@@ -307,6 +307,8 @@ try {
 
 The handled errors are recorded in a `WeakSet`: the error objects are not modified, and not kept in memory. Primitive values (e.g. `throw 'message'`) can't be recorded: they're handled every time they reach a handler, and can't be marked as handled.
 
+> With several Vue apps on the same page (e.g. widgets, micro-frontends) using the same copy of the package, the record is shared by all of them. An error thrown outside of Vue (`promise` and `global` errors, which every app listens to) is only handled by the first app that receives it, and `markAsHandled()` applies to every app. Primitive values still reach every app. Apps bundled with their own copy of the package each have their own record.
+
 ### Server-side rendering
 
 The plugin can be installed on an app rendered on a server: it doesn't access `window` there. On the server, only the errors of the components and of the navigations are caught (there are no `promise` and `global` errors), and the page is never loaded again after a chunk loading failure. See [Known issues](#known-issues) for the boundaries.
@@ -335,6 +337,7 @@ The callbacks receive a `CaughtError`, the same normalized object whatever the e
 | `message` | A readable message, from any thrown value (including the objects that are not errors but have a `message`, e.g. `{ message, code }`). Meant for logs and developers: write the texts displayed to the users yourself (e.g. translated, from the error or its context) |
 | `source` | Where the error was caught. Narrows the type of the error to get the properties of its source |
 | `isChunkLoadError` | Whether a lazy loaded chunk failed to load (e.g. a page or an async component, after a new deployment) |
+
 #### Component errors (`source: 'component'`)
 
 The errors thrown by the components, caught by Vue: setup, render, lifecycle hooks, watchers, event handlers declared in templates (including the promises rejected by async handlers)...
@@ -366,6 +369,22 @@ The errors thrown by the components, caught by Vue: setup, render, lifecycle hoo
 | `global` | `event`: the `error` event (e.g. to get the file and line of the error). For a script loaded from another origin without CORS, the browser hides the error: `error` is `null`, and `message` is `'Script error.'` |
 | `reported` | `instance`: the component that reported the error with `useErrorHandling()`, or `null` when reported with the `report()` of `createErrorHandling()` |
 | `navigation` | `to`: the route the navigation was going to. `from`: the route it was coming from. Both are `RouteLike`: their common properties (`fullPath`, `path`, `name`, `params`, `query`, `hash`, `meta`), so the package doesn't need the types of Vue Router. For the full route, resolve it with `router.resolve(caught.to.fullPath)` |
+
+#### Keeping caught errors
+
+A `CaughtError` keeps references to what it was caught from: the component (`instance`), the event, the routes. If the app keeps the caught errors (e.g. a list of the recent errors in a store), it also keeps these in memory, including the components that were unmounted since (and their whole tree). Keep only what you need instead, e.g.:
+
+```ts
+onError: (caught) => {
+  recentErrors.push({
+    message: caught.message,
+    source: caught.source,
+    phase: caught.source === 'component' ? caught.phase : undefined,
+    // In `<script setup>`, the name is set with `defineOptions({ name })`
+    component: caught.source === 'component' ? caught.instance?.$options.name : undefined,
+  })
+}
+```
 
 ## Known issues
 

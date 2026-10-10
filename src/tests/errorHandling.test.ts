@@ -562,5 +562,20 @@ describe('createErrorHandling()', () => {
 
       expect(onError).toHaveBeenCalledTimes(2)
     })
+
+    it('shares the record between the apps of the page', () => {
+      const firstOnError = vi.fn()
+      const secondOnError = vi.fn()
+      mountWithErrorHandling(EmptyComponent, { onError: firstOnError })
+      mountWithErrorHandling(EmptyComponent, { onError: secondOnError })
+
+      // Both apps listen to the errors outside of Vue: only the first one receiving it handles it
+      dispatchWindowError(new Error('Thrown'))
+      // Primitive values can't be recorded: they reach both
+      dispatchWindowError('Thrown')
+
+      expect(firstOnError.mock.calls.map(([caught]) => caught.error)).toEqual([expect.any(Error), 'Thrown'])
+      expect(secondOnError.mock.calls.map(([caught]) => caught.error)).toEqual(['Thrown'])
+    })
   })
 })

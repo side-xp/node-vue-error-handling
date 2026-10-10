@@ -119,6 +119,16 @@ Then open the URL printed by Vite (`http://localhost:4174`, the built app is ser
 
 > `vite preview` answers the missing chunk with the `index.html` of the app (as most servers configured for the history mode of the router do). Webpack runs it as a script: the browser also reports a `SyntaxError` (`Unexpected token '<'`), caught as a `global` error, before webpack rejects the chunk with its `ChunkLoadError`. With Vite, the missing chunk only fails its `import()`.
 
+### Manual checks wanted
+
+Some behaviors depend on the browser, and can only be checked by hand. Help is welcome for the ones below (open an issue or a pull request with the result, and the version of the browser):
+
+| Check | Browsers checked | Wanted |
+|---|---|---|
+| Retrying an async component whose chunk failed to load: the *Retrying an async component* section of the *Chunk loading failures* page (production build, follow the steps on the page) | Firefox 157: loaded again. Chrome 155: keeps the failure until the page is reloaded | **Safari** (macOS or iOS) |
+
+The result is documented in the *Chunk loading failures* section of the README: update it with the new browser.
+
 ### Linting & formatting
 
 [Biome](https://biomejs.dev) handles linting and formatting in one tool, using the library preset (`@side-xp/biome-config/biome.lib.json`). Its experimental full HTML support is enabled, so the templates of the `.vue` files are checked too (otherwise, variables only used in templates are reported as unused). The **pre-commit** hook runs `lint-staged`, which auto-formats staged files. `npm run check` additionally surfaces type errors.

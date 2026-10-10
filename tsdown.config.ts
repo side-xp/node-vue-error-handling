@@ -1,11 +1,11 @@
 import { defineConfig } from 'tsdown'
 
 export default defineConfig({
+  // The only entry: nothing outside of `src/` (e.g. the playground) can end up in the bundle
   entry: ['src/index.ts'],
-  // ESM-only output. To also emit CJS (legacy consumers) or an IIFE bundle for CDN usage, see the relevant sections in
-  // `docs/protocols.md`.
+  // ESM-only output, resolved by the bundler of the consuming app
   format: ['esm'],
-  platform: 'node',
+  platform: 'browser',
   // Emit `.js`/`.d.ts` (clean names, valid because the package is `type: module`) instead of the default
   // `.mjs`/`.d.mts`.
   fixedExtension: false,
@@ -15,4 +15,5 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: true,
+  // `vue` and `vue-router` are peer dependencies, so they're never bundled
 })

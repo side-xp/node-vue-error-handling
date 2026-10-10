@@ -39,14 +39,53 @@ jobs:
       # publint + attw: validates the published package shape (exports, types resolution).
       - run: npm run check:package
 
+      # The playgrounds are only type-checked by `npm run check`: building them catches a broken Vite or webpack setup.
+      # Their scenarios are checked by hand (see CONTRIBUTING.md).
+      - run: npm run playground:build
+      - run: npm run playground-webpack:build
+
+  # Runs the tests and the type-checking against the supported versions of the peer dependencies, other than the ones of
+  # the lockfile: the oldest supported Vue, and both major versions of Vue Router.
+  compatibility:
+    name: Tests (Vue ${{ matrix.vue }}, Vue Router ${{ matrix.vue-router }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest supported Vue. Vue Router 5 requires Vue ^3.5.34, so it's only tested with the latest Vue.
+          - vue: 3.5.0
+            vue-router: ^4
+          # Latest supported versions (a new major version of Vue is excluded by the peer range of the package)
+          - vue: ^3.5.0
+            vue-router: ^4
+          - vue: ^3.5.0
+            vue-router: ^5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm install --no-save "vue@${{ matrix.vue }}" "vue-router@${{ matrix.vue-router }}"
+      - name: Show the installed versions
+        run: node -p "'vue ' + require('vue/package.json').version + ', vue-router ' + require('vue-router/package.json').version"
+      - run: npm test
+      - run: npm run verify
+
   # Publishes the package to npm and creates a GitHub release via semantic-release.
   # `npm publish` runs the `prepack` (build) and `prepublishOnly` (check:package)
   # scripts, so a broken package can never be published.
   # Auth uses npm Trusted Publishing (OIDC), not NPM_TOKEN. Requires a trusted publisher configured on npmjs.com (see
-  # docs/protocols.md).
+  # CONTRIBUTING.md).
   release:
     name: Release
-    needs: check
+    needs: [check, compatibility]
     concurrency:
       group: release
       cancel-in-progress: false
@@ -78,48 +117,3 @@ jobs:
       - run: npx semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Builds the VitePress documentation and deploys it to GitHub Pages.
-  # Runs after `release` so the deployed docs (which embed the generated API reference) never get ahead of a failed
-  # publish. semantic-release exits cleanly  when there is nothing to release, so docs-only pushes still deploy.
-  # Requires Pages to be enabled: repo Settings > Pages > Source = GitHub Actions.
-  deploy-docs:
-    name: Deploy docs
-    needs: release
-    if: >
-      github.event_name == 'push'
-      && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-      && !github.event.repository.is_template
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - run: npm ci
-
-      - uses: actions/configure-pages@v6
-
-      # VitePress reads BASE_PATH so assets resolve under https://<user>.github.io/<repo>/
-      - run: npm run docs:build
-        env:
-          BASE_PATH: /${{ github.event.repository.name }}/
-
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: docs/.vitepress/dist
-
-      - id: deployment
-        uses: actions/deploy-pages@v5
-
-      # Surface the live URL at the top of the workflow run summary.
-      - run: echo "Docs deployed to ${{ steps.deployment.outputs.page_url }}" >> "$GITHUB_STEP_SUMMARY"

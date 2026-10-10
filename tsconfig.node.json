@@ -23,5 +23,5 @@
     "noImplicitReturns": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["*.config.ts", "scripts/*"]
+  "include": ["*.config.ts", "scripts/*", "playground/vite.config.ts"]
 }

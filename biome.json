@@ -1,4 +1,19 @@
 {
   "$schema": "https://biomejs.dev/schemas/latest/schema.json",
-  "extends": ["@side-xp/biome-config", "@side-xp/biome-config/biome.lib.json"]
+  "extends": ["@side-xp/biome-config", "@side-xp/biome-config/biome.lib.json"],
+  "html": {
+    "experimentalFullSupportEnabled": true
+  },
+  "overrides": [
+    {
+      "includes": ["playground/**", "playground-webpack/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    }
+  ]
 }

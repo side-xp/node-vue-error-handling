@@ -1,14 +1,27 @@
-/**
- * Greets the given name.
- *
- * @param name The name to greet.
- * @returns A greeting string.
- *
- * @example
- * ```ts
- * hello('world') // => 'Hello, world!'
- * ```
- */
-export function hello(name: string): string {
-  return `Hello, ${name}!`
-}
+export { ErrorBoundary } from './errorBoundary'
+export { createErrorHandling } from './errorHandling'
+export { logCaughtError } from './errorLogging'
+export { markAsHandled } from './handledErrors'
+export type {
+  BoundaryError,
+  CaughtError,
+  ComponentError,
+  ErrorBoundaryActions,
+  ErrorBoundaryProps,
+  ErrorBoundarySlots,
+  ErrorFilter,
+  ErrorHandling,
+  ErrorHandlingOptions,
+  ErrorSource,
+  GlobalError,
+  HandlingBoundary,
+  HandlingInfo,
+  NavigationError,
+  PromiseRejectionError,
+  ReportedError,
+  RouteLike,
+  RouterLike,
+  UseErrorHandlingReturn,
+  VuePhase,
+} from './types'
+export { useErrorHandling } from './useErrorHandling'

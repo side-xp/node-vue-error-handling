@@ -9,6 +9,7 @@
     "error-handling",
     "error-boundary"
   ],
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/side-xp/node-vue-error-handling.git"

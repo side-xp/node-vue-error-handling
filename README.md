@@ -4,6 +4,48 @@ Handles the routing and component errors of a Vue app at the closest level possi
 
 > Work in progress: the package is being implemented feature by feature, and is not published yet.
 
+- [Why this package](#why-this-package)
+- [Requirements](#requirements)
+- [Install](#install)
+- [Usage](#usage)
+  - [Install the plugin](#install-the-plugin)
+  - [Caught errors](#caught-errors)
+  - [Error boundaries](#error-boundaries)
+  - [Built-in components](#built-in-components)
+  - [Page boundary and navigation errors](#page-boundary-and-navigation-errors)
+  - [Chunk loading failures (new deployments)](#chunk-loading-failures-new-deployments)
+  - [Report errors](#report-errors)
+  - [Each error is handled once](#each-error-is-handled-once)
+  - [Server-side rendering](#server-side-rendering)
+  - [Development warnings](#development-warnings)
+  - [Options](#options)
+  - [The `CaughtError` object](#the-caughterror-object)
+  - [TypeScript](#typescript)
+- [Recipes](#recipes)
+  - [Notifications](#notifications)
+  - [Monitoring](#monitoring)
+  - [Translated messages in the fallbacks](#translated-messages-in-the-fallbacks)
+- [Known issues](#known-issues)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Why this package
+
+Vue gives the building blocks: `app.config.errorHandler` for the app, and the `onErrorCaptured()` hook for a part of it. An error boundary built on `onErrorCaptured()` alone misses a few cases, that this package handles:
+
+- **The errors a component can't see**: navigation guards that throw and pages that fail to load (given to `router.onError()`, not to the components), errors thrown outside of Vue (timers, listeners, promises never awaited), and errors caught by the app on purpose (`report()`).
+- **Its own content**: Vue skips the boundary for the errors of plain elements and template expressions placed directly in it, and the errors of its fallback shouldn't be handled by the boundary itself (it's already displaying its fallback). The boundary of this package renders its content through an internal component, and gives the errors of its fallback to the parent boundaries.
+- **What it should handle**: by default, only the errors that prevent its content from being displayed (setup, render, async component...). The others (e.g. a failing click handler) leave the content usable, and can be displayed next to it with a `filter`.
+- **What happens to the errors no boundary handled**: a single `onError()` for every error (e.g. for monitoring, knowing which boundary handled it), and `onUnhandledError()` for the others (e.g. a notification), throttled, each error given once. The default logs keep the context that Vue stops logging once an error handler is set (e.g. the component trace).
+- **New deployments**: a navigation that fails to load a chunk of the previous version loads the page again, without looping.
+
+Other packages (as of October 2026, from their documentation):
+
+- [`vue-error-boundary`](https://github.com/dillonchanis/vue-error-boundary) and [`veboundary`](https://github.com/xyhxx/vue-error-boundary): a boundary component on `onErrorCaptured()`, with a fallback and a callback, without handling at the app level. Fit for a simple boundary.
+- [`vue-error-boundary-kit`](https://github.com/macrulezru/vue-error-boundary-kit): a larger toolkit around boundaries, which also captures the global and navigation errors (as separate entry points), with ready-made reporters (Sentry, Bugsnag...), retry with backoff, `resetKeys`, and integrations for TanStack Query and Nuxt. Fit if you want these integrations out of the box.
+
+This package is a single plugin that defines the policy of the whole app (what is handled where, what reaches the user, what is logged), with boundaries that follow it. It doesn't come with reporters or integrations: plug any notification system and monitoring service into its callbacks (see [Recipes](#recipes)).
+
 ## Requirements
 
 - **Vue ≥ 3.5**
@@ -131,14 +173,6 @@ Both slots receive the `error` (`null` in the `default` slot when there's none),
 
 > The errors of the `fallback` slot continue to the parent boundaries. The errors of plain elements and template expressions placed directly in the boundary are handled too (Vue normally skips the boundary for them: the boundary renders its content through an internal child component to prevent it).
 
-In development, the package warns about the boundaries that can't work as intended (with Vue's warnings: through `app.config.warnHandler` if set, otherwise in the console):
-
-- A boundary without a `fallback` slot that can never handle an error: with the `navigation` prop, or with a `filter` that only accepts the errors that need a fallback (e.g. the default one).
-- A `navigation` boundary without the `router` option of `createErrorHandling()`.
-- Several navigation boundaries mounted at once.
-
-It also warns when the error handling is installed after the router (the errors of the first navigation may be missed), or twice on the same app (the second one is skipped). These are given to the console, like Vue's own warnings at install.
-
 ### Built-in components
 
 **`<Suspense>`**: the errors of the async setups (`async setup()`, top-level `await` in `<script setup>`) are handled like the other `setup` errors. Place the boundary **around** the `<Suspense>` (see [Known issues](#known-issues)): `retry()` then displays it again from scratch, and the async setups run again.
@@ -222,19 +256,28 @@ When a new version of the app is deployed, the chunks of the previous version ar
 - Disable it with `reloadOnChunkLoadError: false`.
 
 ```vue
-<ErrorBoundary navigation>
-  <RouterView />
-  <template #fallback="{ error, retry }">
-    <template v-if="error.isChunkLoadError">
-      <p>A new version of the app is available.</p>
-      <button @click="reloadApp">Reload</button>
+<script setup lang="ts">
+/** Loads the app again, which gets the chunks of the new version. */
+function reloadApp(): void {
+  window.location.reload()
+}
+</script>
+
+<template>
+  <ErrorBoundary navigation>
+    <RouterView />
+    <template #fallback="{ error, retry }">
+      <template v-if="error.isChunkLoadError">
+        <p>A new version of the app is available.</p>
+        <button @click="reloadApp">Reload</button>
+      </template>
+      <template v-else>
+        <p>This page can't be displayed.</p>
+        <button @click="retry">Retry</button>
+      </template>
     </template>
-    <template v-else>
-      <p>This page can't be displayed.</p>
-      <button @click="retry">Retry</button>
-    </template>
-  </template>
-</ErrorBoundary>
+  </ErrorBoundary>
+</template>
 ```
 
 The failures are detected from Vite's [`vite:preloadError`](https://vite.dev/guide/build#load-error-handling) event, since the browsers give them different messages. Vite only dispatches it in production builds: while developing, these errors are handled like the others. With another bundler, give the detection to the `isChunkLoadError` option, e.g. with webpack:
@@ -313,6 +356,23 @@ The handled errors are recorded in a `WeakSet`: the error objects are not modifi
 
 The plugin can be installed on an app rendered on a server: it doesn't access `window` there. On the server, only the errors of the components and of the navigations are caught (there are no `promise` and `global` errors), and the page is never loaded again after a chunk loading failure. See [Known issues](#known-issues) for the boundaries.
 
+### Development warnings
+
+In development, the package warns about the setups that can't work as intended, with Vue's warnings (they're removed from the production builds of the app):
+
+- A boundary without a `fallback` slot that can never handle an error: with the `navigation` prop, or with a `filter` that only accepts the errors that need a fallback (e.g. the default one).
+- A `navigation` boundary without the `router` option of `createErrorHandling()`.
+- Several navigation boundaries mounted at once.
+- The error handling installed after the router (the errors of the first navigation may be missed).
+- The error handling installed twice on the same app (the second one is skipped).
+
+Like Vue's own warnings, they go through `app.config.warnHandler` if it's set and they're given while a component renders (e.g. the setup of a boundary), otherwise to the console (e.g. the warnings at install).
+
+A misuse that can't work at all throws an error instead, in every build:
+
+- An `ErrorBoundary`, or `useErrorHandling()`, in an app without the error handling installed.
+- `useErrorHandling()` called outside of the `setup()` of a component (use the `report()` of `createErrorHandling()` instead).
+
 ### Options
 
 | Option | Default | Description |
@@ -386,6 +446,107 @@ onError: (caught) => {
 }
 ```
 
+### TypeScript
+
+The package is written in TypeScript, and ships its types. They don't depend on the types of Vue Router: the apps without it don't need them.
+
+| Types | Description |
+|---|---|
+| `CaughtError` | Any caught error: a union of the types below, narrowed by its `source` |
+| `ComponentError`, `PromiseRejectionError`, `GlobalError`, `ReportedError`, `NavigationError` | The caught errors of each `source` |
+| `ErrorSource`, `VuePhase` | The values of `source` and `phase` |
+| `BoundaryError` | The errors a boundary can display (`component`, `reported` and `navigation` errors), as given to its slots |
+| `HandlingInfo`, `HandlingBoundary` | The second argument of `onError()` (`handledBy`) |
+| `ErrorHandlingOptions`, `ErrorHandling` | The options of `createErrorHandling()`, and the object it returns |
+| `ErrorBoundaryProps`, `ErrorBoundarySlots`, `ErrorBoundaryActions`, `ErrorFilter` | The props, slots and actions of `ErrorBoundary`, and its `filter` |
+| `UseErrorHandlingReturn` | What `useErrorHandling()` returns |
+| `RouterLike`, `RouteLike` | The router and the routes, as the package uses them. The router and the routes of Vue Router 4 and 5 match them |
+
+The slots of `ErrorBoundary` are typed in the templates (checked by `vue-tsc`). With render functions, `h()` doesn't type the slots of a component (a limitation of Vue): type each slot function with `ErrorBoundarySlots`, e.g. `const fallback: ErrorBoundarySlots['fallback'] = ({ error, retry }) => ...`.
+
+## Recipes
+
+The examples use placeholders for the other libraries of the app: `toast` (any notification system), `monitoring` (any monitoring service), and `t()` (any translation function, e.g. the one of `useI18n()` with vue-i18n).
+
+### Notifications
+
+Notify the user of the errors that nothing else handled. The package never writes the texts displayed to the users: choose them from the error.
+
+```ts
+createErrorHandling({
+  onUnhandledError: (caught) => {
+    toast.error(caught.isChunkLoadError ? t('errors.newVersion') : t('errors.generic'))
+  },
+})
+```
+
+The same message is notified at most once every 5 seconds (see the `throttleMs` option), so a repeated error doesn't flood the screen. To skip the errors the users don't need to know about, use `ignore()` (they're not given to `onError()` either), or check them in `onUnhandledError()`.
+
+### Monitoring
+
+Send every error to a monitoring service, with its context:
+
+```ts
+import { createErrorHandling, logCaughtError } from '@side-xp/vue-error-handling'
+
+createErrorHandling({
+  onError: (caught, info) => {
+    // Keeps the logs in the console, with their context
+    logCaughtError(caught, info)
+    monitoring.capture(caught.error, {
+      // The errors handled by a boundary didn't break the page
+      level: info.handledBy ? 'warning' : 'error',
+      tags: {
+        source: caught.source,
+        phase: caught.source === 'component' ? caught.phase : undefined,
+        boundary: info.handledBy?.name,
+        chunkLoadError: caught.isChunkLoadError,
+      },
+    })
+  },
+  // e.g. the requests aborted on purpose
+  ignore: (caught) => caught.error instanceof DOMException && caught.error.name === 'AbortError',
+})
+```
+
+> Some monitoring services come with their own Vue integration, which sets `app.config.errorHandler`. Installed before the plugin, it still receives the component errors (see [Install the plugin](#install-the-plugin)), but not the errors handled by the boundaries, the navigation errors or the reported ones. Choose one way to send the errors, so they're not sent twice: the integration of the service, or `onError()`.
+
+### Translated messages in the fallbacks
+
+Write the texts of the fallbacks from the error: its `source`, its `phase`, `isChunkLoadError`, or the error itself (e.g. an error class of the app):
+
+```vue
+<script setup lang="ts">
+import { type BoundaryError, ErrorBoundary } from '@side-xp/vue-error-handling'
+
+/** Gets the text displayed to the user for the given error. */
+function getErrorText(error: BoundaryError): string {
+  if (error.isChunkLoadError) {
+    return t('errors.newVersion')
+  }
+  if (error.error instanceof ApiError && error.error.status === 404) {
+    return t('errors.notFound')
+  }
+  if (error.source === 'navigation') {
+    return t('errors.pageNotLoaded')
+  }
+  return t('errors.cantDisplay')
+}
+</script>
+
+<template>
+  <ErrorBoundary navigation>
+    <RouterView />
+    <template #fallback="{ error, retry }">
+      <p>{{ getErrorText(error) }}</p>
+      <button @click="retry">{{ t('errors.retry') }}</button>
+    </template>
+  </ErrorBoundary>
+</template>
+```
+
+`caught.message` is meant for the logs and the developers: it's the technical message of the error, never translated.
+
 ## Known issues
 
 - **Boundary inside a `<Suspense>` that is still loading**: it can't replace an async setup that fails with its fallback. Vue renders the failed component after its error, while the boundary already replaced it, and crashes (`Cannot read properties of null (reading 'insertBefore')`). It happens with any `onErrorCaptured()` hook, even without this package. Place the boundary around the `<Suspense>` instead. Once the `<Suspense>` is resolved, the boundaries inside it work as usual.
@@ -396,3 +557,13 @@ onError: (caught) => {
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup, the playground app and the release process.
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE.md).
+
+---
+
+Crafted and maintained with love by [Sideways Experiments](https://sideways-experiments.com)
+
+(c) 2022-2026 Sideways Experiments

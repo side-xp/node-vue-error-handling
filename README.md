@@ -26,25 +26,24 @@ Handles the routing and component errors of a Vue app at the closest level possi
   - [Monitoring](#monitoring)
   - [Translated messages in the fallbacks](#translated-messages-in-the-fallbacks)
 - [Known issues](#known-issues)
+- [Limitations and alternatives](#limitations-and-alternatives)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Why this package
 
-Vue gives the building blocks: `app.config.errorHandler` for the app, and the `onErrorCaptured()` hook for a part of it. An error boundary built on `onErrorCaptured()` alone misses a few cases, that this package handles:
+Vue gives the building blocks: `app.config.errorHandler` for the app, and the `onErrorCaptured()` hook for a part of it. This package is a single plugin built on them, that defines the policy of the whole app (what is handled where, what reaches the user, what is logged), with error boundaries that follow it:
 
-- **The errors a component can't see**: navigation guards that throw and pages that fail to load (given to `router.onError()`, not to the components), errors thrown outside of Vue (timers, listeners, promises never awaited), and errors caught by the app on purpose (`report()`).
-- **Its own content**: Vue skips the boundary for the errors of plain elements and template expressions placed directly in it, and the errors of its fallback shouldn't be handled by the boundary itself (it's already displaying its fallback). The boundary of this package renders its content through an internal component, and gives the errors of its fallback to the parent boundaries.
-- **What it should handle**: by default, only the errors that prevent its content from being displayed (setup, render, async component...). The others (e.g. a failing click handler) leave the content usable, and can be displayed next to it with a `filter`.
-- **What happens to the errors no boundary handled**: a single `onError()` for every error (e.g. for monitoring, knowing which boundary handled it), and `onUnhandledError()` for the others (e.g. a notification), throttled, each error given once. The default logs keep the context that Vue stops logging once an error handler is set (e.g. the component trace).
+- **Every error goes through one place.** The errors of the components, the navigation errors (guards that throw, pages that fail to load), the errors thrown outside of Vue (timers, listeners, promises never awaited) and the errors reported by the app all reach a single `onError()`, including the ones a boundary handled (with the boundary that handled them). Monitoring is set up once, not per boundary.
+- **Only the errors nothing handled reach the user**, through `onUnhandledError()`: throttled, each error given once.
+- **The boundaries know Vue's phases.** By default, a boundary only replaces its content for the errors that prevent it from being displayed (setup, render, async component...). The others (e.g. a failing click handler) leave the content usable, and can be displayed next to it with a `filter`. The phases are read in the development and production builds of Vue alike.
+- **The boundaries cover their whole content**: the errors of plain elements and template expressions placed directly in a boundary (that Vue gives to the parent component), and the errors reported by the components of its content (`useErrorHandling().report()`).
+- **A fallback that fails is never left blank**: its errors go to the parent boundaries, which display their own fallback.
+- **The navigation errors are displayed by the page boundary**, and cleared by the next navigation (including a link to the current page), with nothing to reset by hand.
 - **New deployments**: a navigation that fails to load a chunk of the previous version loads the page again, without looping.
+- **Readable messages and logs**: a message from any thrown value (including the objects with a `message`, like many API errors), and the default logs keep the context that Vue stops logging once an error handler is set (e.g. the component trace).
 
-Other packages (as of October 2026, from their documentation):
-
-- [`vue-error-boundary`](https://github.com/dillonchanis/vue-error-boundary) and [`veboundary`](https://github.com/xyhxx/vue-error-boundary): a boundary component on `onErrorCaptured()`, with a fallback and a callback, without handling at the app level. Fit for a simple boundary.
-- [`vue-error-boundary-kit`](https://github.com/macrulezru/vue-error-boundary-kit): a larger toolkit around boundaries, which also captures the global and navigation errors (as separate entry points), with ready-made reporters (Sentry, Bugsnag...), retry with backoff, `resetKeys`, and integrations for TanStack Query and Nuxt. Fit if you want these integrations out of the box.
-
-This package is a single plugin that defines the policy of the whole app (what is handled where, what reaches the user, what is logged), with boundaries that follow it. It doesn't come with reporters or integrations: plug any notification system and monitoring service into its callbacks (see [Recipes](#recipes)).
+It doesn't come with reporters or integrations: plug any notification system and monitoring service into its callbacks (see [Recipes](#recipes)). See [Limitations and alternatives](#limitations-and-alternatives) for what it doesn't do.
 
 ## Requirements
 
@@ -553,6 +552,22 @@ function getErrorText(error: BoundaryError): string {
 - **Boundary rendered on a server**: it handles the errors of its content (they're given to `onError()` as handled by the boundary), but the server renders the failed content (empty) instead of the fallback. The server renders the app in a single pass: the boundary is already rendered when its content fails. Vue's `onErrorCaptured()` has the same limitation. In the browser:
   - If the content fails again while hydrating, the boundary displays its fallback, without hydration mismatch.
   - If the content only failed on the server (e.g. a request that only failed there), it's displayed in the browser, and Vue reports a hydration mismatch (`Hydration completed but contains mismatches.`) like for any difference between the server and the browser.
+
+## Limitations and alternatives
+
+This package focuses on the error handling policy of the app and its boundaries. It doesn't include:
+
+- **Reporters** for the monitoring services (Sentry, Bugsnag, OpenTelemetry...), rate-limiting of the reports, or breadcrumbs: plug the service of your choice into `onError()` (see [Monitoring](#monitoring)).
+- **Automatic resets**: no clearing of a boundary when a value changes (like `resetKeys` in other libraries), no limit on the retries, no retry with backoff. Call `retry()` or `clear()` from the slots, or change the `key` of the boundary to display its content again from scratch.
+- **Combined components and data fetching integrations**: no component combining `<Suspense>` and a boundary, no integration with data fetching libraries (e.g. resetting the failed queries of TanStack Query on retry).
+- **Testing utilities and a devtools panel.**
+- **Nuxt**: not supported, nor tested. Nuxt has its own error handling (`<NuxtErrorBoundary>`, its own `errorHandler`).
+- **Older versions**: Vue 3.5 or later only (no Vue 2, no Vue 3.4 or earlier).
+
+Other packages may fit better (as of October 2026):
+
+- [`vue-error-boundary-kit`](https://github.com/macrulezru/vue-error-boundary-kit): a toolkit with these out of the box: reporters for the monitoring services, `resetKeys`, limited retries and retries with backoff, a component combining `<Suspense>` and a boundary, TanStack Query and Nuxt integrations, testing utilities and a devtools history (Vue 3.4 or later).
+- [`vue-error-boundary`](https://github.com/dillonchanis/vue-error-boundary): a minimal boundary component (a fallback component and an error callback), for an app that only needs a boundary, without handling at the app level.
 
 ## Contributing
 

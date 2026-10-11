@@ -169,6 +169,12 @@ export function createErrorHandling(options: ErrorHandlingOptions = {}): ErrorHa
           return
         }
       }
+      // A boundary rendered from the route (e.g. in a layout chosen from `route.meta`) isn't mounted yet
+      if (caught.isInitialNavigation && navigationBoundaries.size === 0) {
+        warn(
+          `${LOG_PREFIX} The first navigation failed, and no navigation boundary is mounted: no page is displayed, and the error only goes to \`onUnhandledError()\`. Mount the navigation boundary before the first navigation ends (e.g. around the root router view, not inside a layout chosen from the route), or display a blocking screen from \`onUnhandledError()\` when \`caught.isInitialNavigation\` is \`true\`.`,
+        )
+      }
       handleError(caught)
     })
 

@@ -102,6 +102,8 @@ export function createNavigationError(
     isChunkLoadError: isChunkLoadError(error),
     to,
     from,
+    // The start location of the router matches no route
+    isInitialNavigation: from.matched.length === 0,
   }
 }
 

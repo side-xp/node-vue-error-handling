@@ -159,6 +159,71 @@ describe('navigation errors', () => {
     expect(onError).toHaveBeenCalledOnce()
   })
 
+  describe('first navigation', () => {
+    /** Creates a router whose first page fails to load, not started yet (installing it starts the first navigation). */
+    function createFailingStartRouter(): Router {
+      return createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          {
+            path: '/',
+            component: createPage('Home'),
+            beforeEnter: () => {
+              throw new Error('Guard failed')
+            },
+          },
+        ],
+      })
+    }
+
+    /** Waits for the first navigation of the given router to end, ignoring its error. */
+    async function waitForFirstNavigation(router: Router): Promise<void> {
+      try {
+        await router.isReady()
+      } catch {
+        // Handled by `router.onError()`
+      }
+      await nextTick()
+    }
+
+    it('is displayed by the navigation boundary when it fails', async () => {
+      const router: Router = createFailingStartRouter()
+      const onUnhandledError = vi.fn()
+      const { container } = mountInApp(renderRouterView(true), { router, onUnhandledError })
+
+      await waitForFirstNavigation(router)
+
+      expect(container.textContent).toBe('Fallback: Guard failed')
+      expect(onUnhandledError).not.toHaveBeenCalled()
+    })
+
+    it('is flagged when it fails', async () => {
+      const router: Router = createFailingStartRouter()
+      const onUnhandledError = vi.fn()
+      // The warning about the missing navigation boundary is tested with the development warnings
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mountInApp(renderRouterView(false), { router, onUnhandledError })
+
+      await waitForFirstNavigation(router)
+
+      expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ source: 'navigation', isInitialNavigation: true }),
+      )
+    })
+
+    it("doesn't flag the next navigations", async () => {
+      const router: Router = await createTestRouter()
+      const onUnhandledError = vi.fn()
+      mountInApp(renderRouterView(false), { router, onUnhandledError })
+
+      await navigate(router, '/guard-fails')
+
+      expect(onUnhandledError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ source: 'navigation', isInitialNavigation: false }),
+      )
+    })
+  })
+
   describe('navigation prop', () => {
     /** Renders the router view in a boundary whose `navigation` prop is the given ref. */
     function renderToggledRouterView(isNavigation: Ref<boolean>): () => VNodeChild {

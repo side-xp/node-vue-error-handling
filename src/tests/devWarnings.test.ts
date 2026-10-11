@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { type App, type Component, createApp, defineComponent, h } from 'vue'
+import { type App, type Component, createApp, defineComponent, h, nextTick } from 'vue'
 import { createMemoryHistory, createRouter, type Router, RouterView } from 'vue-router'
 import { createErrorHandling } from '@/errorHandling'
 import { LOG_PREFIX } from '@/errorLogging'
@@ -21,6 +21,21 @@ function collectWarnings(
     () => renderBoundary(props, { default: () => h(RouterView), fallback: hasFallback ? () => 'Fallback' : undefined }),
     { ...options, onWarn: (message) => warnings.push(message) },
   )
+  return warnings
+}
+
+/**
+ * Spies on `console.warn()`, and returns the warnings of the library.
+ * Outside of a component (e.g. at install, or in a router hook), Vue's `warn()` doesn't go through
+ * `app.config.warnHandler` (it gets the app from the component), like Vue's own warnings at install.
+ */
+function collectConsoleWarnings(): string[] {
+  const warnings: string[] = []
+  vi.spyOn(console, 'warn').mockImplementation((message: unknown) => {
+    if (typeof message === 'string' && message.includes(LOG_PREFIX)) {
+      warnings.push(message)
+    }
+  })
   return warnings
 }
 
@@ -82,6 +97,78 @@ describe('development warnings', () => {
     })
   })
 
+  describe('first navigation', () => {
+    /** Creates a router whose pages fail to load, not started yet (installing it starts the first navigation). */
+    function createFailingRouter(): Router {
+      return createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          {
+            path: '/:path(.*)',
+            component: { render: () => 'Page' },
+            beforeEnter: () => {
+              throw new Error('Guard failed')
+            },
+          },
+        ],
+      })
+    }
+
+    /** Navigates with the given router, and waits for the navigation to end, ignoring its error. */
+    async function navigate(router: Router, path?: string): Promise<void> {
+      try {
+        await (path === undefined ? router.isReady() : router.push(path))
+      } catch {
+        // Handled by `router.onError()`
+      }
+      await nextTick()
+    }
+
+    it('warns when it fails without a navigation boundary', async () => {
+      const warnings: string[] = collectConsoleWarnings()
+      const router: Router = createFailingRouter()
+      // e.g. a boundary inside a layout chosen from the route, not rendered before the first navigation succeeds
+      mountInApp(() => h(RouterView), { router })
+
+      await navigate(router)
+
+      expect(warnings).toEqual([expect.stringContaining('The first navigation failed')])
+    })
+
+    it("doesn't warn when it fails with a navigation boundary", async () => {
+      const warnings: string[] = collectConsoleWarnings()
+      const router: Router = createFailingRouter()
+      mountInApp(
+        () => renderBoundary({ navigation: true }, { default: () => h(RouterView), fallback: () => 'Fallback' }),
+        {
+          router,
+        },
+      )
+
+      await navigate(router)
+
+      expect(warnings).toEqual([])
+    })
+
+    it("doesn't warn when the next navigations fail without a navigation boundary", async () => {
+      const warnings: string[] = collectConsoleWarnings()
+      const router: Router = createTestRouter()
+      router.addRoute({
+        path: '/guard-fails',
+        component: { render: () => 'Guarded' },
+        beforeEnter: () => {
+          throw new Error('Guard failed')
+        },
+      })
+      mountInApp(() => h(RouterView), { router })
+
+      await navigate(router)
+      await navigate(router, '/guard-fails')
+
+      expect(warnings).toEqual([])
+    })
+  })
+
   describe('installation', () => {
     /** Apps created by the current test, unmounted after it. */
     const createdApps: App[] = []
@@ -91,21 +178,6 @@ describe('development warnings', () => {
       const app: App = createApp(root)
       createdApps.push(app)
       return app
-    }
-
-    /**
-     * Spies on `console.warn()`, and returns the warnings of the library.
-     * Outside of a component, Vue's `warn()` doesn't go through `app.config.warnHandler` (it gets the app from the
-     * component), like Vue's own warnings at install.
-     */
-    function collectConsoleWarnings(): string[] {
-      const warnings: string[] = []
-      vi.spyOn(console, 'warn').mockImplementation((message: unknown) => {
-        if (typeof message === 'string' && message.includes(LOG_PREFIX)) {
-          warnings.push(message)
-        }
-      })
-      return warnings
     }
 
     afterEach(() => {

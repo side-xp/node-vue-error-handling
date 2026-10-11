@@ -20,6 +20,11 @@ export interface RouteLike {
   hash: string
   /** The meta fields of the route records, merged. */
   meta: Record<PropertyKey, unknown>
+  /**
+   * The route records matched by the path, from the parent to the child. Empty for the start location of the router
+   * (before the first navigation), and for a path that matches no route.
+   */
+  matched: readonly unknown[]
 }
 
 /**
@@ -129,6 +134,12 @@ export interface NavigationError extends CaughtErrorBase {
   to: RouteLike
   /** The route the navigation was coming from. */
   from: RouteLike
+  /**
+   * Whether it's the first navigation of the app: no page is displayed yet. Without a navigation boundary mounted to
+   * display it, the error goes to `onUnhandledError()` while the screen is empty (e.g. display a blocking error screen
+   * instead of a notification).
+   */
+  isInitialNavigation: boolean
 }
 
 /** An error caught by the error handling, with the context it was caught in. Narrow it with its `source`. */

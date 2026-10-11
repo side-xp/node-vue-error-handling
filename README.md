@@ -248,6 +248,24 @@ Wrap the router view with a boundary to handle the errors of the pages (e.g. in 
 
 > Use a single navigation boundary (e.g. around the root router view, not the nested ones): a navigation that fails aborts the whole navigation. With several, the first one mounted displays the errors.
 
+**Mount the navigation boundary before the first navigation ends.** Until a page is displayed, the router is on its start location, which matches no route. A boundary rendered from the route (e.g. inside a layout chosen from `route.meta`, or behind a `v-if` on the route) isn't mounted when the first navigation fails. Neither is any boundary when the app waits for `router.isReady()` before `app.mount()`. The error then goes to `onUnhandledError()` while the screen is empty, with `isInitialNavigation: true` (see [Blocking error screen](#blocking-error-screen)). A development warning is displayed in this case. With layouts chosen from the route, place the boundary around the layout instead of inside it, and wrap its fallback in a layout of its own (`LAYOUTS` maps the names of the layouts to their components):
+
+```vue
+<RouterView v-slot="{ Component, route }">
+  <ErrorBoundary navigation>
+    <component :is="LAYOUTS[route.meta.layout]" v-if="Component">
+      <component :is="Component" />
+    </component>
+    <template #fallback="{ retry }">
+      <DefaultLayout>
+        <p>This page can't be displayed.</p>
+        <button @click="retry">Retry</button>
+      </DefaultLayout>
+    </template>
+  </ErrorBoundary>
+</RouterView>
+```
+
 ### Chunk loading failures (new deployments)
 
 When a new version of the app is deployed, the chunks of the previous version are no longer served: the users still running it fail to load the pages they haven't visited yet. When a navigation fails this way, the page is loaded again, which gets the new version:
@@ -365,6 +383,7 @@ In development, the package warns about the setups that can't work as intended, 
 - A boundary without a `fallback` slot that can never handle an error: with the `navigation` prop, or with a `filter` that only accepts the errors that need a fallback (e.g. the default one).
 - A `navigation` boundary without the `router` option of `createErrorHandling()`.
 - Several navigation boundaries mounted at once.
+- The first navigation failed without a navigation boundary mounted (no page is displayed, see [Page boundary and navigation errors](#page-boundary-and-navigation-errors)).
 - The error handling installed after the router (the errors of the first navigation may be missed).
 - The error handling installed twice on the same app (the second one is skipped).
 
@@ -430,7 +449,7 @@ The errors thrown by the components, caught by Vue: setup, render, lifecycle hoo
 | `promise` | `event`: the `unhandledrejection` event (e.g. to get the rejected `promise`) |
 | `global` | `event`: the `error` event (e.g. to get the file and line of the error). For a script loaded from another origin without CORS, the browser hides the error: `error` is `null`, and `message` is `'Script error.'` |
 | `reported` | `instance`: the component that reported the error with `useErrorHandling()`, or `null` when reported with the `report()` of `createErrorHandling()` |
-| `navigation` | `to`: the route the navigation was going to. `from`: the route it was coming from. Both are `RouteLike`: their common properties (`fullPath`, `path`, `name`, `params`, `query`, `hash`, `meta`), so the package doesn't need the types of Vue Router. For the full route, resolve it with `router.resolve(caught.to.fullPath)` |
+| `navigation` | `to`: the route the navigation was going to. `from`: the route it was coming from. Both are `RouteLike`: their common properties (`fullPath`, `path`, `name`, `params`, `query`, `hash`, `meta`, `matched`), so the package doesn't need the types of Vue Router. For the full route, resolve it with `router.resolve(caught.to.fullPath)`. `isInitialNavigation`: whether it's the first navigation of the app, so no page is displayed yet |
 
 #### Keeping caught errors
 
@@ -483,6 +502,24 @@ createErrorHandling({
 ```
 
 The same message is notified at most once every 5 seconds (see the `throttleMs` option), so a repeated error doesn't flood the screen. To skip the errors the users don't need to know about, use `ignore()` (they're not given to `onError()` either), or check them in `onUnhandledError()`.
+
+### Blocking error screen
+
+When the first navigation fails and no navigation boundary is mounted (e.g. the app waits for `router.isReady()` before mounting), no page is displayed: a notification would show over an empty screen. Display a blocking error screen instead:
+
+```ts
+createErrorHandling({
+  router,
+  onUnhandledError: (caught) => {
+    if (caught.source === 'navigation' && caught.isInitialNavigation) {
+      // Any screen of the app that offers to reload it (e.g. with `window.location.reload()`)
+      showBlockingErrorScreen(caught)
+      return
+    }
+    toast.error(t('errors.generic'))
+  },
+})
+```
 
 ### Monitoring
 

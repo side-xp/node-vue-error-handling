@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/side-xp/node-vue-error-handling/compare/v1.0.0...v1.0.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* fixed first navigation error warning ([0899c21](https://github.com/side-xp/node-vue-error-handling/commit/0899c21fefbc0d09fb38ae760996660b90d9f09f))
+
 # 1.0.0 (2026-10-10)
 
 

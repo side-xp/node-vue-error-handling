@@ -57,7 +57,7 @@
     "playground-webpack:preview": "vite preview playground-webpack --port 4174",
     "check:package": "publint --strict && attw --pack --ignore-rules cjs-resolves-to-esm",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run check:package",
+    "prepublishOnly": "npm run build && npm run check:package",
     "prepare": "husky"
   },
   "devDependencies": {

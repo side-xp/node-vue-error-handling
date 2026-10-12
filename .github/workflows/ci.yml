@@ -79,8 +79,8 @@ jobs:
       - run: npm run verify
 
   # Publishes the package to npm and creates a GitHub release via semantic-release.
-  # `npm publish` runs the `prepack` (build) and `prepublishOnly` (check:package)
-  # scripts, so a broken package can never be published.
+  # `npm publish` runs `prepublishOnly` (build + check:package) before `prepack` (build), so a broken package can never
+  # be published. `prepublishOnly` must build on its own: it runs first, on a clean checkout without `dist`.
   # Auth uses npm Trusted Publishing (OIDC), not NPM_TOKEN. Requires a trusted publisher configured on npmjs.com (see
   # CONTRIBUTING.md).
   release:

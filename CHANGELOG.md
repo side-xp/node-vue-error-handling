@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/side-xp/node-vue-error-handling/compare/v1.0.1...v1.0.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* fixed final release step ([d3f2df6](https://github.com/side-xp/node-vue-error-handling/commit/d3f2df6f038b78a2c1b96836aa0c9604fdb78d19))
+
 ## [1.0.1](https://github.com/side-xp/node-vue-error-handling/compare/v1.0.0...v1.0.1) (2026-10-11)
 
 
